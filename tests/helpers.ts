@@ -75,11 +75,14 @@ export function fakeGit(
   return Object.assign(calls, { inits })
 }
 
-/** The panes the plugin has open, as the host would keep them; `titles` holds the latest title of each. */
+/** The panes the plugin has open, as the host would keep them; `titles` holds the latest title of each, `focused` the focus requests. */
 export function fakePanes(on: On) {
   const open = new Set<string>()
   const titles = new Map<string, string>()
+  /** The ids of the panes asked to take the keyboard, in order. */
+  const focused: string[] = []
   on('ui.open', (_$, e) => {
+    if (e.focus) focused.push(e.id)
     open.add(e.id)
     titles.set(e.id, e.title ?? e.id)
     return { value: { isPlaced: true as const } }
@@ -91,7 +94,7 @@ export function fakePanes(on: On) {
   on('ui.panes', () => ({
     value: [...open].map(id => ({ id, title: titles.get(id) ?? id, isShown: true, isFocused: false, isPlaced: true })),
   }))
-  return Object.assign(open, { titles })
+  return Object.assign(open, { titles, focused })
 }
 
 /**

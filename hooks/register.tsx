@@ -134,6 +134,20 @@ export const register: Register = (on, options) => {
     return ran
   })
 
+  // A click on a Button is only a press: the pane does not take the keyboard, so its hotkeys would not answer
+  // next. Ask for it first (the press may focus a field, which needs the pane to hold the keys). The surface
+  // refuses while the pane already has them or the prompt holds text; then nothing changes.
+  on('ui.press', async ($, e, next) => {
+    if (e.requestId === PANE && e.surface === 'terminal') {
+      try {
+        await $.ui.open({ id: PANE, title: 'Git Graph', focus: true })
+      } catch {
+        // The press still runs; ctrl+x tab focuses the pane.
+      }
+    }
+    return next(e)
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
