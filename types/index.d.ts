@@ -23,6 +23,80 @@ export type GitGraphStatusEntry = {
   path: string
 }
 
+/** A local or remote branch the Branches picker offers. */
+export type GitGraphBranch = {
+  /** Full ref name (`refs/heads/main`, `refs/remotes/origin/main`): what `git log` is given. */
+  ref: string
+  /** `main` or `origin/main`. */
+  name: string
+  kind: 'branch' | 'remote'
+}
+
+/** One changed file of a commit, or of the difference between two points. */
+export type GitGraphFile = {
+  /** One letter of git's name-status: A M D R C T U. */
+  status: string
+  path: string
+  /** The path before a rename or copy. */
+  oldPath?: string
+  /** Lines added and removed; null for a binary file. */
+  added: number | null
+  deleted: number | null
+}
+
+export type GitGraphCommitInfo = {
+  hash: string
+  parents: string[]
+  author: string
+  authorEmail: string
+  authorTimestamp: number
+  committer: string
+  committerEmail: string
+  committerTimestamp: number
+  /** The whole message: subject, blank line, body. */
+  message: string
+}
+
+/** The open details of one commit (the one the user pressed `o` on). */
+export type GitGraphDetails =
+  | { kind: 'loading'; hash: string }
+  | { kind: 'error'; hash: string; message: string }
+  | {
+      kind: 'ready'
+      hash: string
+      info: GitGraphCommitInfo
+      /** What the files are measured against: the first parent, or the empty tree for a root commit. */
+      base: string
+      files: GitGraphFile[]
+    }
+
+/** The files that differ between two points, `from` the older one; `to` may be the working tree. */
+export type GitGraphComparison =
+  | { kind: 'loading'; from: string; to: string }
+  | { kind: 'error'; from: string; to: string; message: string }
+  | { kind: 'ready'; from: string; to: string; files: GitGraphFile[] }
+
+/** The diff screen that replaces the graph in the pane; idle means the graph shows. */
+export type GitGraphDiffView =
+  | { kind: 'idle' }
+  | {
+      kind: 'open'
+      /** The two points the files differ between (`to` may be 'uncommitted': the working tree). */
+      from: string
+      to: string
+      /** The list the shown file is one of; n / p and the digits walk it. */
+      files: GitGraphFile[]
+      index: number
+      /** `abc1234 (vs def5678)`, `abc1234 ↔ def5678` or `abc1234 ↔ working tree`. */
+      range: string
+      body:
+        | { kind: 'loading' }
+        | { kind: 'error'; message: string }
+        /** A one-line explanation instead of a diff (binary file, rename without edits). */
+        | { kind: 'notice'; text: string }
+        | { kind: 'ready'; source: string; hiddenLines: number }
+    }
+
 export type GitGraphSnapshot =
   | { kind: 'loading' }
   | { kind: 'not-repo' }
@@ -35,6 +109,10 @@ export type GitGraphSnapshot =
       /** Hash HEAD points at; null in a repository without commits. */
       head: string | null
       changes: GitGraphStatusEntry[]
+      /** Local and remote branches, for the Branches picker. */
+      branches: GitGraphBranch[]
+      /** The branch (full ref) the log is restricted to; null for all. */
+      filter: string | null
     }
 
 declare module 'claude-code' {
@@ -49,6 +127,18 @@ declare module 'claude-code' {
       isChangesOpen: boolean
       /** The user's choice of graph style; null until they press `g`, then the terminal decides. */
       graphStyle: 'image' | 'text' | null
+      /** Hash of the commit row the cursor is on ('uncommitted' for that row); null until j/k or a click. */
+      cursor: string | null
+      /** The commit whose details are unfolded under its row. */
+      details: GitGraphDetails | null
+      /** Set while the details are in compare mode. */
+      comparison: GitGraphComparison | null
+      /** Full ref the log is restricted to; null shows everything. */
+      branchFilter: string | null
+      /** Find: whether the field is shown, and the text highlighted in the loaded commits. */
+      search: { isOpen: boolean; query: string }
+      isFetching: boolean
+      diff: GitGraphDiffView
     }
   }
 }

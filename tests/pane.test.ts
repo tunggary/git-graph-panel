@@ -1,79 +1,15 @@
-import { describe, expect, mock, test } from 'claude-code/testing'
+import { describe, expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { darken } from '../hooks/lib/labels'
 import { PALETTE } from '../hooks/lib/lanes'
-import { parseLog } from '../hooks/lib/parse'
-import { FIXTURE_HEAD, FIXTURE_LOG, FIXTURE_STATUS } from './fixtures/fixture-log'
-
-const PLUGIN = 'git-graph-panel'
-const PANE = 'git-graph'
-const commits = parseLog(FIXTURE_LOG)
-const RUN = { command: 'graph', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } } as never
-
-/** Stands in for the host's git: answers `$.process.run` from the fixture's output. */
-function fakeGit(
-  on: On,
-  { isRepo = true, status = FIXTURE_STATUS, env = {}, store = new Map() }: { isRepo?: boolean; status?: string; env?: Record<string, string>; store?: Map<string, unknown> } = {},
-) {
-  mock.env(on, env) // no terminal variables: the text graph
-  on('store.get', (_$, e) => ({ value: store.get(e.key) }))
-  on('store.set', (_$, e) => {
-    store.set(e.key, e.value)
-    return { value: undefined }
-  })
-  const calls: string[][] = []
-  const ok = (stdout: string) => ({
-    value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
-  })
-  on('process.run', (_$, e) => {
-    const argv = [...e.argv]
-    calls.push(argv)
-    if (!isRepo) {
-      return { value: { ...ok('').value, exitCode: 128, stderr: 'fatal: not a git repository' } }
-    }
-    if (argv.includes('--is-inside-work-tree')) return ok('true\n')
-    if (argv.includes('--verify')) return ok(`${FIXTURE_HEAD}\n`)
-    if (argv.includes('log')) return ok(FIXTURE_LOG)
-    if (argv.includes('status')) return ok(status)
-    throw new Error(`unexpected git call: ${argv.join(' ')}`)
-  })
-  return calls
-}
-
-/** The panes the plugin has open, as the host would keep them. */
-function fakePanes(on: On) {
-  const open = new Set<string>()
-  on('ui.open', (_$, e) => {
-    open.add(e.id)
-    return { value: { isPlaced: true as const } }
-  })
-  on('ui.close', (_$, e) => {
-    open.delete(e.id)
-    return { value: undefined }
-  })
-  on('ui.panes', () => ({
-    value: [...open].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })),
-  }))
-  return open
-}
-
-const paneProps = (bodyColumns: number) => ({
-  title: 'Git Graph',
-  isFocused: false,
-  bodyColumns,
-  placement: 'dock' as const,
-  scroll: { offset: 0, bodyRows: 40 },
-  view: {},
-})
+import { PANE, PLUGIN, RUN, commits, fakeGit, fakePanes, logCalls, mountAt, paneProps } from './helpers'
 
 // `$.tool.call` is typed over every connected MCP tool as well, and the compiler gives up on that union
 // (TS2589) for a Bash call; this narrows it to the one shape the tests use.
 const callBash = ($: Engine, command: string) =>
   ($.tool.call as unknown as (input: { tool: 'Bash'; command: string }) => Promise<unknown>)({ tool: 'Bash', command })
-
-const logCalls = (calls: string[][]) => calls.filter(argv => argv.includes('log'))
 
 describe('git graph pane', () => {
   test('/graph opens the pane, loads the repository and toggles it closed', async ($, on) => {
@@ -108,7 +44,7 @@ describe('git graph pane', () => {
     await ui.press({ key: 'load-more' })
     expect(logCalls(calls).at(-1)).toContain('-n101')
     expect(await ui.find({ key: `commit:${commits[70]?.hash}` })).toBeDefined()
-    expect(await ui.find({ key: 'load-more' })).toBeUndefined() // all 71 commits are loaded
+    expect(await ui.find({ key: 'load-more' })).toBeUndefined() // all 75 commits are loaded
     await ui.unmount()
   })
 
@@ -145,12 +81,12 @@ describe('git graph pane', () => {
     await $.command.run(RUN)
     const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(140), viewport: { columns: 140, rows: 40 } })
 
-    expect((await ui.find({ key: 'remotes' }))?.text).toContain('☑ Show remote branches')
+    expect((await ui.find({ key: 'remotes' }))?.text).toContain('☑ remote')
     await ui.press({ key: 'remotes' })
     const log = logCalls(calls).at(-1) ?? []
     expect(log).not.toContain('--remotes')
     expect(log).toEqual(expect.arrayContaining(['--branches', '--tags', 'HEAD']))
-    expect((await ui.find({ key: 'remotes' }))?.text).toContain('☐ Show remote branches')
+    expect((await ui.find({ key: 'remotes' }))?.text).toContain('☐ remote')
     await ui.unmount()
   })
 
@@ -226,7 +162,7 @@ describe('git graph pane', () => {
 
     await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
     // The pane is opened and filled in the background, after session.start has answered.
-    for (let i = 0; i < 100 && logCalls(calls).length === 0; i++) await Promise.resolve()
+    for (let i = 0; i < 1000 && logCalls(calls).length === 0; i++) await Promise.resolve()
     expect(open.has(PANE)).toBe(true)
     expect(logCalls(calls)).toHaveLength(1)
   })
@@ -240,9 +176,6 @@ describe('git graph pane', () => {
     await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
     expect(open.has(PANE)).toBe(false)
   })
-
-  const mountAt = ($: Engine, columns: number) =>
-    $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(columns), viewport: { columns, rows: 40 } })
 
   test('a header row names the columns and loses them with the same rules as the rows', async ($, on) => {
     fakeGit(on)

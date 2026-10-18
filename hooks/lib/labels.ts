@@ -1,6 +1,7 @@
 // Branch / tag pills of a commit row. Pure: refs in, display labels out.
 
 import type { GitGraphRef } from '../../types'
+import { cellWidth } from './text'
 
 export type Label = {
   kind: GitGraphRef['kind']
@@ -74,4 +75,17 @@ export function pillParts(label: Label, laneColor: string): PillPart[] {
   const parts = [part(` ${label.name} `, laneColor)]
   if (label.remotes.length > 0) parts.push(part(`│ ${label.remotes.join(' │ ')} `, darken(laneColor)))
   return parts
+}
+
+/** The leading labels whose pills (and the space after each) fit in `width` cells, and the cells they take. */
+export function fitLabels(labels: readonly Label[], width: number): { shown: Label[]; used: number } {
+  const shown: Label[] = []
+  let used = 0
+  for (const label of labels) {
+    const cells = pillParts(label, '#000000').reduce((sum, part) => sum + cellWidth(part.text), 0) + 1
+    if (used + cells > width) break
+    shown.push(label)
+    used += cells
+  }
+  return { shown, used }
 }

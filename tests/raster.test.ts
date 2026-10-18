@@ -140,7 +140,7 @@ describe('rowImage', () => {
 
   test('all rows of the fixture stay far below the 2 MiB of Image source a tree may carry', () => {
     const bytes = graph.rows.reduce((sum, row) => sum + rowImage(row, graph.laneCount, { isHead: row.hash === FIXTURE_HEAD }).png.length, 0)
-    expect(graph.rows).toHaveLength(72)
+    expect(graph.rows).toHaveLength(76)
     expect(bytes).toBeLessThan(400_000)
   })
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { contrastColor, darken, labelText, mergeLabels, pillParts } from '../hooks/lib/labels'
+import { contrastColor, darken, fitLabels, labelText, mergeLabels, pillParts } from '../hooks/lib/labels'
+import type { Label } from '../hooks/lib/labels'
 import { PALETTE, laneColor } from '../hooks/lib/lanes'
 import { parseRefs } from '../hooks/lib/parse'
 
@@ -75,5 +76,17 @@ describe('pill colors', () => {
     expect(pillParts(first('refs/remotes/origin/x'), lane)).toEqual([{ text: ' origin/x ', bg: darken(lane), fg: contrastColor(darken(lane)) }])
     expect(pillParts(first('tag: refs/tags/v1'), lane)[0]?.bg).toBe('#9a6700')
     expect(pillParts(first('HEAD'), lane)[0]?.bg).toBe('#8957e5')
+  })
+})
+
+describe('fitLabels', () => {
+  const label = (name: string): Label => ({ kind: 'branch', name, remotes: [], isCurrent: false })
+
+  test('keeps the leading pills that fit, each with the space after it', () => {
+    const labels = [label('main'), label('develop'), label('feature/x')]
+    expect(fitLabels(labels, 100)).toEqual({ shown: labels, used: 7 + 10 + 12 })
+    expect(fitLabels(labels, 17)).toEqual({ shown: [labels[0], labels[1]], used: 17 })
+    expect(fitLabels(labels, 16).shown).toEqual([labels[0]])
+    expect(fitLabels(labels, 3)).toEqual({ shown: [], used: 0 })
   })
 })

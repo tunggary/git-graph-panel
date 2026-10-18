@@ -19,7 +19,7 @@ describe('fixture repository', () => {
   })
 
   test('parses every commit, with Korean, pipes and quotes intact', () => {
-    expect(commits).toHaveLength(71)
+    expect(commits).toHaveLength(75)
     const subjects = commits.map(commit => commit.subject)
     expect(subjects).toContain('fix: 파이프(|) 문자 파싱 오류 수정')
     expect(subjects).toContain('feat(payment): 결제 | 취소 | 환불 플로우')
@@ -63,6 +63,10 @@ describe('fixture repository', () => {
     const lines = graph.rows.map((row, i) => `${cellsToText(row.cells)} ${i === 0 ? `Uncommitted Changes (${changes.length})` : commits[i - 1]?.subject}`)
     expect(lines).toEqual([
     "○                Uncommitted Changes (3)",
+    "●                add: 큰 diff를 만드는 생성 파일 4000줄",
+    "●                add: 바이너리 로고 추가",
+    "●                refactor: release.txt를 release-notes.txt로 이름 변경",
+    "●                feat: 상세 보기용 여러 줄 본문",
     "●                docs: 변경 내역 정리",
     "●                feat: 로컬에만 있는 커밋",
     "│ ●              feat(remote): origin 에만 있는 브랜치",

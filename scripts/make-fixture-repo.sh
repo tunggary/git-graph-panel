@@ -7,7 +7,8 @@
 # repository <dir>.origin.git next to it. Covers: main/develop/feature/release/hotfix branches, merge
 # commits, an octopus merge, 10 feature lanes open at once (more than the
 # graph's 8-lane limit), tags, a branch that exists only on origin, messages
-# with Korean text, `|` and quotes, and three uncommitted changes (M, A, ??).
+# with Korean text, `|` and quotes, a multi-line message body, a rename, a binary file, a 4000-line
+# file, and three uncommitted changes (M, A, ??).
 set -euo pipefail
 
 if [ $# -ne 1 ]; then
@@ -158,6 +159,34 @@ git branch -q -D feature/remote-only
 # Local develop is ahead of origin/develop.
 commit "feat: 로컬에만 있는 커밋" develop.txt
 commit "docs: 변경 내역 정리" develop.txt
+
+# --- commits for the details and diff views: a multi-line body, a rename, a binary file, a huge diff ------
+stamp
+echo "multi-line" >> develop.txt
+git add develop.txt
+git commit -q -F - <<'MSG'
+feat: 상세 보기용 여러 줄 본문
+
+첫 번째 문단입니다. 본문은 여러 줄로 이어집니다.
+두 번째 줄에는 | 파이프와 "따옴표"가 있습니다.
+
+- 목록 항목 하나
+- 목록 항목 둘
+MSG
+
+stamp
+git mv release.txt release-notes.txt
+git commit -q -m "refactor: release.txt를 release-notes.txt로 이름 변경"
+
+stamp
+printf '\000\001\002\377\376\375binary\000payload\n' > logo.bin
+git add logo.bin
+git commit -q -m "add: 바이너리 로고 추가"
+
+stamp
+seq 1 4000 | sed 's/^/generated line number /' > big-generated.txt
+git add big-generated.txt
+git commit -q -m "add: 큰 diff를 만드는 생성 파일 4000줄"
 
 # --- a stash (refs/stash); the graph leaves it out, so tests can check that -------
 echo "stashed edit" >> develop.txt
