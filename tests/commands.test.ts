@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { GitGraphSnapshot } from '../types'
-import { PROTECTED_REASON, checkRefArgv, displayCommand, nameError, parseProtected, planFor, rowMenu, splitRemote } from '../hooks/lib/commands'
+import { PROTECTED_REASON, checkRefArgv, displayCommand, isQuick, nameError, parseProtected, planFor, rowMenu, splitRemote } from '../hooks/lib/commands'
 import type { Facts, Plan, Target } from '../hooks/lib/commands'
 import { parseBranches } from '../hooks/lib/parse'
 import { REFS, commits } from './helpers'
@@ -259,5 +259,34 @@ describe('names and display', () => {
 
   test('a remote branch splits at the first slash', () => {
     expect(splitRemote('origin/feature/x')).toEqual({ remote: 'origin', branch: 'feature/x' })
+  })
+})
+
+describe('quick actions', () => {
+  const QUICK: Array<[Target, string]> = [
+    [commitTarget(merge.hash), 'tag'],
+    [commitTarget(merge.hash), 'branch'],
+    [commitTarget(merge.hash), 'branch-checkout'],
+    [commitTarget(merge.hash), 'checkout'],
+    [{ kind: 'branch', name: 'feature/x' }, 'checkout'],
+    [{ kind: 'branch', name: 'feature/x' }, 'rename'],
+    [{ kind: 'remote', name: 'origin/feature/x' }, 'checkout'],
+    [{ kind: 'uncommitted' }, 'stash'],
+    [{ kind: 'uncommitted' }, 'stash-untracked'],
+  ]
+
+  test('exactly the local, easy-to-undo actions skip the confirmation', () => {
+    for (const [target, id] of QUICK) expect(isQuick(target.kind, id)).toBe(true)
+    for (const [kind, id] of [['commit', 'revert'], ['commit', 'reset-hard'], ['commit', 'merge'], ['branch', 'delete'], ['branch', 'push'], ['remote', 'fetch'], ['remote', 'pull'], ['tag', 'delete'], ['tag', 'push'], ['uncommitted', 'discard'], ['uncommitted', 'abort']] as const) {
+      expect(isQuick(kind, id)).toBe(false)
+    }
+  })
+
+  test('a quick action never carries a danger', () => {
+    for (const [target, id] of QUICK) {
+      const plan = planFor(target, id, 'name', facts())
+      expect(plan.kind).toBe('run')
+      expect((plan as { danger?: string }).danger).toBeUndefined()
+    }
   })
 })

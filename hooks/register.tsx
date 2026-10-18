@@ -4,10 +4,12 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { GitGraphCommit, GitGraphFile, GitGraphStatusEntry } from '../types'
 import {
   cancelActionForm,
+  cancelConfirm,
   chooseAction,
   clearFind,
   closeDiff,
   compareAtCursor,
+  confirmRun,
   fetchRemotes,
   gotoDiff,
   branchChoices,
@@ -33,7 +35,7 @@ import {
   toggleAtCursor,
   toggleRemotes,
 } from './actions'
-import { parseProtected, rowMenu } from './lib/commands'
+import { displayCommand, parseProtected, rowMenu } from './lib/commands'
 import { AUTHOR_WIDTH, DATE_WIDTH, GAP, GRAPH_MIN_WIDTH, HASH_WIDTH, maxLanesFor, pickColumns } from './lib/columns'
 import { UNCOMMITTED, isGitRepo } from './lib/git'
 import { fitLabels, mergeLabels, pillParts } from './lib/labels'
@@ -456,6 +458,25 @@ export const register: Register = (on, options) => {
           lines.push(<Button key="action-cancel" plain hotkey="q" label="✕ Cancel (or Enter on an empty field)" onPress={() => cancelActionForm($)} />)
           return lines
         }
+      }
+      if (menu.confirm) {
+        const { plan } = menu.confirm
+        const item = sections.flatMap(section => section.items).find(one => one.key === menu.confirm?.key)
+        lines.push(<Text bold>{item?.label ?? plan.label}</Text>)
+        if (plan.danger !== undefined) lines.push(<Text color="warning">{`⚠ ${plan.danger}`}</Text>)
+        lines.push(<Text>Run this?</Text>)
+        for (const argv of plan.commands) lines.push(<Text dimColor>{displayCommand(argv)}</Text>)
+        const runButton =
+          plan.danger === undefined ? (
+            <Button key="confirm-run" plain hotkey="y" label="Run" onPress={() => confirmRun($)} />
+          ) : (
+            <Button key="confirm-run" plain hotkey="y" onPress={() => confirmRun($)}>
+              <Text color="warning">Run</Text>
+            </Button>
+          )
+        const cancelButton = <Button key="confirm-cancel" plain hotkey="q" label="Cancel" onPress={() => cancelConfirm($)} />
+        lines.push(...(plan.danger === undefined ? [runButton, cancelButton] : [cancelButton, runButton]))
+        return lines
       }
       lines.push(<Text dimColor>j/k: Select  o: Run  1-9  a: Close</Text>)
       let at = 0

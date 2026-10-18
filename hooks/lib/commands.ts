@@ -227,6 +227,16 @@ const run = (label: string, commands: string[][], extra: Partial<Extract<Plan, {
   ...extra,
 })
 
+/** Local and easy to undo: these run as soon as they are chosen. Everything else shows its command and waits for a Run. */
+const QUICK: Record<Target['kind'], readonly string[]> = {
+  commit: ['tag', 'branch', 'branch-checkout', 'checkout'],
+  branch: ['checkout', 'rename'],
+  remote: ['checkout'],
+  tag: [],
+  uncommitted: ['stash', 'stash-untracked'],
+}
+export const isQuick = (kind: Target['kind'], id: string): boolean => QUICK[kind].includes(id)
+
 const LOST = 'Uncommitted changes are discarded for good; this cannot be undone.'
 
 /** What running `id` on `target` does. `input` is the text the action's prompt collected. */
