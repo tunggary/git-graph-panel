@@ -115,6 +115,24 @@ export type GitGraphSnapshot =
       filter: string | null
     }
 
+/** The action list unfolded under a row (`a`). */
+export type GitGraphActionMenu = {
+  /** The row it belongs to: a commit's hash, or 'uncommitted'. */
+  hash: string
+  /** A merge, rebase, cherry-pick or revert waiting for the person, read when the list opened. */
+  operation: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | null
+  /** The highlighted item, counted over the items of all sections (j / k move it, o runs it). */
+  index: number
+  /** The text field of an action that needs a name or a message; null while the list shows. */
+  form: { key: string; value: string; error?: string } | null
+}
+
+/** The branch list unfolded under the toolbar (`l`). */
+export type GitGraphBranchMenu = {
+  /** The highlighted entry; 0 is `Show All`. */
+  index: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'git-graph-panel': {
@@ -139,6 +157,10 @@ declare module 'claude-code' {
       search: { isOpen: boolean; query: string }
       isFetching: boolean
       diff: GitGraphDiffView
+      /** The action list under the cursor's row; null when closed. */
+      actionMenu: GitGraphActionMenu | null
+      /** The branch list under the toolbar; null when closed. */
+      branchMenu: GitGraphBranchMenu | null
     }
   }
 }

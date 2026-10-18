@@ -53,12 +53,15 @@ export function fakeGit(
     return { value: undefined }
   })
   const calls: string[][] = []
+  /** The `{ env, timeoutMs }` each call was given, parallel to `calls`. */
+  const inits: Array<{ env?: Record<string, string>; timeoutMs?: number } | undefined> = []
   const reply = ({ stdout = '', stderr = '', exitCode = 0 }: GitAnswer) => ({
     value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false },
   })
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     calls.push(argv)
+    inits.push(e.init)
     if (!isRepo) return reply({ exitCode: 128, stderr: 'fatal: not a git repository' })
     const custom = answer?.(argv.slice(1))
     if (custom) return reply(custom)
@@ -69,7 +72,7 @@ export function fakeGit(
     if (argv.includes('status')) return reply({ stdout: status })
     throw new Error(`unexpected git call: ${argv.join(' ')}`)
   })
-  return calls
+  return Object.assign(calls, { inits })
 }
 
 /** The panes the plugin has open, as the host would keep them; `titles` holds the latest title of each. */
@@ -121,3 +124,20 @@ export const mountAt = ($: Engine, columns: number, requestId = PANE) =>
   $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId, props: paneProps(columns), viewport: { columns, rows: 40 } })
 
 export const logCalls = (calls: string[][]) => calls.filter(argv => argv.includes('log'))
+
+/**
+ * Stands in for the person at `$.ui.ask`: records every question with its option labels and answers with `reply`
+ * (a label, or anything else for a typed answer). The dialog is a `tool.call` of AskUserQuestion beneath the plugin.
+ */
+export function fakeAsk(on: On, reply: (asked: { question: string; options: string[]; header: string }) => string) {
+  const asked: Array<{ question: string; options: string[]; header: string }> = []
+  on('tool.call', (_$, e, next) => {
+    const input = e as unknown as { tool: string; questions: Array<{ question: string; header: string; options: Array<{ label: string }> }> }
+    if (input.tool !== 'AskUserQuestion') return next(e)
+    const [one] = input.questions
+    const entry = { question: one?.question ?? '', header: one?.header ?? '', options: (one?.options ?? []).map(option => option.label) }
+    asked.push(entry)
+    return { result: { questions: input.questions, answers: { [entry.question]: reply(entry) } } } as never
+  })
+  return asked
+}
