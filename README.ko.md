@@ -117,7 +117,7 @@ claude plugin install git-graph-panel --marketplace tunggary/git-graph-panel
 - Pull은 `git pull --no-rebase --no-edit`이고, Merge는 `--no-edit`를 씁니다.
 - Push는 브랜치의 upstream으로 가고, upstream이 없으면 새 `origin/<이름>`을 만들어 추적하게 합니다.
 - Copy는 터미널의 클립보드(클립보드 도구 또는 OSC 52)를 씁니다. 복사되지 않으면 toast에 값이 표시됩니다.
-- 명령이 도는 동안 상태 줄에 `Running git …`이 나옵니다. 끝나면 toast로 결과(예: `Deleted feature/x`)를 알리고, 목록을 닫고, 그래프를 갱신합니다. 확인 창이 닫히면 패널이 키보드 포커스를 다시 가져옵니다.
+- 명령이 도는 동안 상태 줄에 `Running git …`이 나옵니다. 끝나면 toast로 결과(예: `Deleted feature/x`)를 알리고, 목록을 닫고, 그래프를 갱신합니다.
 
 ## 키
 
@@ -167,6 +167,14 @@ claude plugin install git-graph-panel --marketplace tunggary/git-graph-panel
 | `1`-`9` | 앞 9개 항목 바로 실행 |
 | `a` | 메뉴 닫기 |
 
+### 확인
+
+| 키 | 동작 |
+| --- | --- |
+| `y` | 실행 |
+| `q` | 취소하고 동작 목록으로 돌아감 |
+| `a` | 메뉴 닫기 |
+
 ### 브랜치 목록
 
 | 키 | 동작 |
@@ -182,7 +190,7 @@ claude plugin install git-graph-panel --marketplace tunggary/git-graph-panel
 
 | 키 | 동작 |
 | --- | --- |
-| `Enter` | 확인 단계로 진행. 브랜치·태그 이름이 올바르지 않으면 오류를 보여 주고 그대로 머뭄 |
+| `Enter` | 동작 실행. 브랜치·태그 이름이 올바르지 않으면 오류를 보여 주고 그대로 머뭄 |
 | 빈 칸에서 `Enter` | 취소하고 메뉴로 돌아감 (stash 메시지는 선택 사항이라 빈 칸 Enter도 진행됨) |
 | `q` 또는 `✕ Cancel` | 메뉴로 돌아감 (입력 칸을 벗어난 뒤) |
 
@@ -217,12 +225,10 @@ claude plugin configure git-graph-panel
 
 ## 안전 장치
 
-![hard reset 확인창: Cancel이 먼저 나오는 ⚠ Dangerous 대화상자와 옆의 동작 메뉴](docs/images/confirm.png)
-
-- 쓰기 동작은 모두 전체 명령을 보여 주는 확인(`Run` / `Cancel`)을 거칩니다. 확인 없이 실행되는 것은 Copy뿐입니다.
-- 되돌릴 수 없는 동작은 `⚠`와 잃게 되는 내용으로 시작하고, 선택지가 `Cancel`, `Run` 순서로 나옵니다. 해당 동작은 Reset (hard), Discard all changes, Discard and remove untracked files, Clean untracked files, Delete remote branch, Delete tag (also on origin), Force push, 그리고 merge되지 않은 브랜치 삭제(`-D`)입니다. merge된 브랜치는 `-d`로 삭제합니다.
-- `Run` 이외의 응답(Cancel, 대화상자 닫기)은 아무것도 실행하지 않고 동작 목록으로 돌아가므로, 다른 항목을 고를 수 있습니다.
-- 브랜치·태그 이름은 확인 단계 전에 `git check-ref-format`으로 검사합니다.
+- 로컬이고 되돌리기 쉬운 빠른 동작은 확인 없이 바로 실행됩니다: Add Tag, Create Branch, Create Branch and check out, Checkout(커밋·로컬 브랜치·원격 브랜치), Rename, Stash(둘 다). Copy도 바로 실행됩니다. 그 밖의 쓰기 동작은 동작 목록 자리에 전체 명령을 패널 안에 보여 주고 `y: Run` / `q: Cancel`을 둡니다.
+- 되돌릴 수 없는 동작은 그 확인이 `⚠`와 잃게 되는 내용으로 시작하고, 버튼이 `Cancel`, `Run` 순서로 나옵니다. 해당 동작은 Reset (hard), Discard all changes, Discard and remove untracked files, Clean untracked files, Delete remote branch, Delete tag (also on origin), Force push, 그리고 merge되지 않은 브랜치 삭제(`-D`)입니다. merge된 브랜치는 `-d`로 삭제합니다.
+- `Cancel`은 아무것도 실행하지 않고 동작 목록으로 돌아가므로, 다른 항목을 고를 수 있습니다.
+- 브랜치·태그 이름은 동작을 실행하기 전에 `git check-ref-format`으로 검사합니다.
 - 명령은 인자 배열로 실행하며 셸 문자열로 이어 붙이지 않으므로, 이름이나 메시지가 다른 의미로 해석되지 않습니다.
 - 명령은 `GIT_TERMINAL_PROMPT=0`(git이 자격 증명을 묻지 않음)과 `GIT_EDITOR=true`로 실행합니다. 네트워크 명령은 120초, 나머지는 30초 뒤에 중단됩니다.
 - merge, rebase, cherry-pick, revert, pull이 충돌로 멈추면 toast에 `conflict: resolve then continue`가 나옵니다.
@@ -321,7 +327,7 @@ claude plugin test .
 
 - hotkey는 소문자 한 글자 또는 숫자 하나여야 합니다. Find가 `/`가 아니라 `s`인 이유입니다.
 - 사람이 패널을 잡고 있는 동안에는 플러그인이 다른 패널을 앞으로 띄울 수 없습니다. 그래서 diff 화면이 같은 패널 안에 있습니다.
-- 훅의 시간 예산은 10초입니다. 그래서 오래 걸리는 작업(네트워크 git, 확인 질문)은 시작한 핸들러에서 떼어 내(detach) 실행합니다.
+- 훅의 시간 예산은 10초입니다. 그래서 오래 걸리는 작업(네트워크 git)은 시작한 핸들러에서 떼어 내(detach) 실행합니다.
 - 패널 하나에 실을 수 있는 이미지는 2 MiB입니다. 위에서부터 1.5 MiB까지만 이미지로 그리고, 그 아래 행은 글자로 그립니다.
 
 ### 작업 방식

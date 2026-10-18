@@ -223,6 +223,17 @@ describe('git graph pane', () => {
     await ui.unmount()
   })
 
+  test('a click on a button in the pane asks for the keyboard, so its hotkeys work next', async ($, on) => {
+    fakeGit(on)
+    const panes = fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await mountAt($, 140)
+    expect(panes.focused).toEqual([])
+    await ui.press({ key: `select:${commits[2]!.hash}` }) // the description and labels of a row
+    expect(panes.focused).toEqual([PANE])
+    await ui.unmount()
+  })
+
   test('a ghostty terminal draws the graph as pictures', async ($, on) => {
     fakeGit(on, { env: { TERM_PROGRAM: 'ghostty' } })
     fakePanes(on)

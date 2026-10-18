@@ -75,11 +75,14 @@ export function fakeGit(
   return Object.assign(calls, { inits })
 }
 
-/** The panes the plugin has open, as the host would keep them; `titles` holds the latest title of each. */
+/** The panes the plugin has open, as the host would keep them; `titles` holds the latest title of each, `focused` the focus requests. */
 export function fakePanes(on: On) {
   const open = new Set<string>()
   const titles = new Map<string, string>()
+  /** The ids of the panes asked to take the keyboard, in order. */
+  const focused: string[] = []
   on('ui.open', (_$, e) => {
+    if (e.focus) focused.push(e.id)
     open.add(e.id)
     titles.set(e.id, e.title ?? e.id)
     return { value: { isPlaced: true as const } }
@@ -91,7 +94,7 @@ export function fakePanes(on: On) {
   on('ui.panes', () => ({
     value: [...open].map(id => ({ id, title: titles.get(id) ?? id, isShown: true, isFocused: false, isPlaced: true })),
   }))
-  return Object.assign(open, { titles })
+  return Object.assign(open, { titles, focused })
 }
 
 /**
@@ -124,20 +127,3 @@ export const mountAt = ($: Engine, columns: number, requestId = PANE) =>
   $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId, props: paneProps(columns), viewport: { columns, rows: 40 } })
 
 export const logCalls = (calls: string[][]) => calls.filter(argv => argv.includes('log'))
-
-/**
- * Stands in for the person at `$.ui.ask`: records every question with its option labels and answers with `reply`
- * (a label, or anything else for a typed answer). The dialog is a `tool.call` of AskUserQuestion beneath the plugin.
- */
-export function fakeAsk(on: On, reply: (asked: { question: string; options: string[]; header: string }) => string) {
-  const asked: Array<{ question: string; options: string[]; header: string }> = []
-  on('tool.call', (_$, e, next) => {
-    const input = e as unknown as { tool: string; questions: Array<{ question: string; header: string; options: Array<{ label: string }> }> }
-    if (input.tool !== 'AskUserQuestion') return next(e)
-    const [one] = input.questions
-    const entry = { question: one?.question ?? '', header: one?.header ?? '', options: (one?.options ?? []).map(option => option.label) }
-    asked.push(entry)
-    return { result: { questions: input.questions, answers: { [entry.question]: reply(entry) } } } as never
-  })
-  return asked
-}
