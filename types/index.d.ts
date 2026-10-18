@@ -121,6 +121,8 @@ export type GitGraphActionMenu = {
   hash: string
   /** A merge, rebase, cherry-pick or revert waiting for the person, read when the list opened. */
   operation: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | null
+  /** The surface has a text field: when false, the items that ask for a name are left out. */
+  canInput: boolean
   /** The highlighted item, counted over the items of all sections (j / k move it, o runs it). */
   index: number
   /** The text field of an action that needs a name or a message; null while the list shows. */
