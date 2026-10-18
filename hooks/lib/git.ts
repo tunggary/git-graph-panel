@@ -33,7 +33,10 @@ export async function loadSnapshot($: Runner, { limit, isRemotesShown }: GitOpti
     // A repository without commits has nothing to log (and `HEAD` would be an error).
     let commits: Commit[] = []
     if (head !== null) {
-      const revs = isRemotesShown ? ['--all'] : ['--branches', '--tags', 'HEAD']
+      // `--exclude` applies to the `--all` after it; the stash is not part of the graph.
+      // Branches, remotes, tags and HEAD only, as Git Graph reads them: `--all` would also pull in stashes and
+      // tools' private refs (cmux keeps `refs/cmux/last-turn/*`).
+      const revs = isRemotesShown ? ['--branches', '--remotes', '--tags', 'HEAD'] : ['--branches', '--tags', 'HEAD']
       const log = await git([
         '-c', 'log.showSignature=false',
         'log', '--date-order', '-z', '--decorate=full', `--format=${LOG_FORMAT}`,

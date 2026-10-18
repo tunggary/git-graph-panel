@@ -2,11 +2,16 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { GitGraphCommit, GitGraphRef, GitGraphStatusEntry } from '../types'
-import { AUTHOR_WIDTH, DATE_WIDTH, GAP, HASH_WIDTH, pickColumns } from './lib/columns'
+import { AUTHOR_WIDTH, DATE_WIDTH, GAP, GRAPH_MIN_WIDTH, HASH_WIDTH, pickColumns } from './lib/columns'
 import { isGitRepo, loadSnapshot } from './lib/git'
-import { PALETTE, layoutGraph, toRuns } from './lib/lanes'
-import type { Cell } from './lib/lanes'
+import { mergeLabels, pillParts } from './lib/labels'
+import type { Label } from './lib/labels'
+import { PALETTE, cellsToText, laneColor, layoutGraph, toRuns } from './lib/lanes'
+import type { GraphRow } from './lib/lanes'
 import { formatDate } from './lib/parse'
+import { imageBudget, rowImage } from './lib/raster'
+import type { RowImage } from './lib/raster'
+import { supportsImages } from './lib/terminal'
 
 const PANE = 'git-graph'
 const PAGE_SIZE = 50
@@ -16,6 +21,9 @@ const snapshot = atom({ plugin: 'git-graph-panel', key: 'snapshot' } as const, {
 const isRemotesShown = atom({ plugin: 'git-graph-panel', key: 'isRemotesShown' } as const, true)
 const limit = atom({ plugin: 'git-graph-panel', key: 'limit' } as const, PAGE_SIZE)
 const isChangesOpen = atom({ plugin: 'git-graph-panel', key: 'isChangesOpen' } as const, false)
+const graphStyle = atom({ plugin: 'git-graph-panel', key: 'graphStyle' } as const, null)
+
+const STYLE_STORE_KEY = 'graphStyle'
 
 type Dollar = EngineInterface
 
@@ -31,21 +39,24 @@ async function openPane($: Dollar): Promise<void> {
 
 const isPaneOpen = async ($: Dollar): Promise<boolean> => (await $.ui.panes()).some(pane => pane.id === PANE)
 
-const colorOfCell = (cell: number | null): string | undefined => (cell === null ? undefined : PALETTE[cell])
-
-/** Local branch, then remote branches, then tags; the checked-out branch / HEAD first. */
-function sortRefs(refs: readonly GitGraphRef[]): GitGraphRef[] {
-  const rank = { head: 0, branch: 1, remote: 2, tag: 3 } as const
-  return [...refs].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || rank[a.kind] - rank[b.kind])
+/** Image-capable terminals only: tmux and everything unknown get the text graph. */
+async function detectImages($: Dollar): Promise<boolean> {
+  return supportsImages({
+    TMUX: await $.env.get('TMUX'),
+    TERM_PROGRAM: await $.env.get('TERM_PROGRAM'),
+    KITTY_WINDOW_ID: await $.env.get('KITTY_WINDOW_ID'),
+  })
 }
 
-const REF_COLORS = { head: 'claude', branch: 'success', remote: 'suggestion', tag: 'warning' } as const
+const colorOfCell = (cell: number | null): string | undefined => (cell === null ? undefined : PALETTE[cell])
 
 const STATUS_COLORS: Record<string, string> = { M: 'warning', A: 'success', D: 'error', R: 'suggestion', '??': 'inactive' }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'graph', description: 'Open or close the git graph pane' })
+    const saved = await $.store.get(STYLE_STORE_KEY)
+    if (saved === 'image' || saved === 'text') await update($, graphStyle, () => saved)
     if (await isGitRepo($)) void openPane($).catch(() => {})
 
     return next(e)
@@ -78,10 +89,13 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const ui = $.ui.resolve(e)
+    const { Box, Text, Button } = ui
+    const Image = 'Image' in ui ? ui.Image : null // only the terminal surface draws pictures
     const snap = await read($, snapshot)
     const remotes = await read($, isRemotesShown)
     const changesOpen = await read($, isChangesOpen)
+    const chosenStyle = await read($, graphStyle)
 
     if (snap.kind === 'loading') return <Text dimColor>Loading git history...</Text>
     if (snap.kind === 'not-repo') {
@@ -89,6 +103,7 @@ export const register: Register = on => {
     }
     if (snap.kind === 'error') return <Text color="error">git failed: {snap.message}</Text>
 
+    const style = chosenStyle ?? ((await detectImages($)) ? 'image' : 'text')
     const { commits, changes } = snap
     const inputs = [
       ...(changes.length > 0
@@ -97,37 +112,89 @@ export const register: Register = on => {
       ...commits,
     ]
     const graph = layoutGraph(inputs)
-    const layout = pickColumns(e.props.bodyColumns, graph.width)
+    const graphWidth = Math.max(graph.width, GRAPH_MIN_WIDTH)
+    const layout = pickColumns(e.props.bodyColumns, graphWidth)
 
-    const Graph = ({ cells }: { cells: Cell[] }) => (
-      <Box width={graph.width} flexShrink={0}>
-        <Text>
-          {toRuns(cells).map(run => (
-            <Text color={colorOfCell(run.color)}>{run.text}</Text>
-          ))}
-        </Text>
-      </Box>
-    )
+    // Pictures are handed out from the top down until the tree's Image budget is spent; the rest is text.
+    const budget = imageBudget()
+    const pictureOf = (row: GraphRow, options: { isHead?: boolean; isTrail?: boolean }, uses = 1) => {
+      if (style !== 'image' || !Image) return null
+      const image = rowImage(row, graph.laneCount, options)
+      return budget.take(image.png.length * uses) ? image : null
+    }
 
-    const Labels = ({ refs }: { refs: readonly GitGraphRef[] }) => (
-      <Text>
-        {sortRefs(refs).map(ref => (
-          <Text color={REF_COLORS[ref.kind]} bold={ref.isCurrent} inverse={ref.isCurrent}>
-            {` ${ref.name} `}
+    const Graph = ({ row, picture, isTrail = false }: { row: GraphRow; picture: RowImage | null; isTrail?: boolean }) => {
+      const cells = isTrail ? row.trail : row.cells
+      if (picture && Image) {
+        const image = picture
+        return (
+          <Box width={graphWidth} flexShrink={0}>
+            <Image source={image} columns={graph.width} rows={1} alt={cellsToText(cells)} />
+          </Box>
+        )
+      }
+
+      return (
+        <Box width={graphWidth} flexShrink={0}>
+          <Text>
+            {toRuns(cells).map(run => (
+              <Text color={colorOfCell(run.color)}>{run.text}</Text>
+            ))}
           </Text>
-        ))}
-        {refs.length > 0 ? ' ' : ''}
+        </Box>
+      )
+    }
+
+    const Labels = ({ labels, color }: { labels: Label[]; color: string }) => (
+      <Text>
+        {labels
+          .map(label => (
+            <Text>
+              {pillParts(label, color).map(part => (
+                <Text backgroundColor={part.bg} color={part.fg} bold={label.isCurrent}>
+                  {part.text}
+                </Text>
+              ))}
+            </Text>
+          ))
+          .flatMap(pill => [pill, ' '])}
       </Text>
     )
 
+    const Header = () => (
+      <Box key="header" gap={GAP}>
+        <Box width={graphWidth} flexShrink={0}>
+          <Text bold dimColor>Graph</Text>
+        </Box>
+        <Box width={layout.messageWidth} flexShrink={0}>
+          <Text bold dimColor>Description</Text>
+        </Box>
+        {layout.showDate && (
+          <Box width={DATE_WIDTH} flexShrink={0}>
+            <Text bold dimColor>Date</Text>
+          </Box>
+        )}
+        {layout.showAuthor && (
+          <Box width={AUTHOR_WIDTH} flexShrink={0}>
+            <Text bold dimColor>Author</Text>
+          </Box>
+        )}
+        {layout.showHash && (
+          <Box width={HASH_WIDTH} flexShrink={0}>
+            <Text bold dimColor>Commit</Text>
+          </Box>
+        )}
+      </Box>
+    )
+
     // One row per commit; `key` is the extension point for selecting a commit later.
-    const CommitRow = ({ commit, cells }: { commit: GitGraphCommit; cells: Cell[] }) => (
+    const CommitRow = ({ commit, row, picture }: { commit: GitGraphCommit; row: GraphRow; picture: RowImage | null }) => (
       <Box key={`commit:${commit.hash}`} gap={GAP}>
-        <Graph cells={cells} />
+        <Graph row={row} picture={picture} />
         <Box width={layout.messageWidth} flexShrink={0}>
           <Text wrap="truncate-end">
-            <Labels refs={commit.refs} />
-            {commit.subject}
+            <Labels labels={mergeLabels(commit.refs)} color={laneColor(row.lane)} />
+            <Text dimColor={commit.parents.length > 1}>{commit.subject}</Text>
           </Text>
         </Box>
         {layout.showDate && (
@@ -148,9 +215,9 @@ export const register: Register = on => {
       </Box>
     )
 
-    const FileRow = ({ entry, cells }: { entry: GitGraphStatusEntry; cells: Cell[] }) => (
+    const FileRow = ({ entry, row, picture }: { entry: GitGraphStatusEntry; row: GraphRow; picture: RowImage | null }) => (
       <Box key={`file:${entry.path}`} gap={GAP}>
-        <Graph cells={cells} />
+        <Graph row={row} picture={picture} isTrail />
         <Box width={layout.messageWidth} flexShrink={0}>
           <Text wrap="truncate-start">
             <Text color={STATUS_COLORS[entry.code] ?? 'text'}>{entry.code.padEnd(2)}</Text> {entry.path}
@@ -162,17 +229,20 @@ export const register: Register = on => {
     const commitRows = new Map(commits.map(commit => [commit.hash, commit]))
     const rows = graph.rows.map(row => {
       const commit = commitRows.get(row.hash)
-      if (commit) return <CommitRow commit={commit} cells={row.cells} />
+      if (commit) return <CommitRow commit={commit} row={row} picture={pictureOf(row, { isHead: commit.hash === snap.head })} />
+
+      const picture = pictureOf(row, {})
+      const trailPicture = changesOpen ? pictureOf(row, { isTrail: true }, changes.length) : null
 
       return (
         <Box key="uncommitted" flexDirection="column">
           <Box gap={GAP}>
-            <Graph cells={row.cells} />
+            <Graph row={row} picture={picture} />
             <Button key="changes" plain hotkey="c" onPress={() => update($, isChangesOpen, open => !open)}>
               {changesOpen ? '▾' : '▸'} <Text italic>Uncommitted Changes ({changes.length})</Text>
             </Button>
           </Box>
-          {changesOpen && changes.map(entry => <FileRow entry={entry} cells={row.trail} />)}
+          {changesOpen && changes.map(entry => <FileRow entry={entry} row={row} picture={trailPicture} />)}
         </Box>
       )
     })
@@ -191,8 +261,20 @@ export const register: Register = on => {
               await refresh($)
             }}
           />
+          <Button
+            key="style"
+            plain
+            hotkey="g"
+            label={`Graph style: ${style}`}
+            onPress={async () => {
+              const next = style === 'image' ? 'text' : 'image'
+              await update($, graphStyle, () => next)
+              await $.store.set(STYLE_STORE_KEY, next)
+            }}
+          />
         </Box>
         {commits.length === 0 && changes.length === 0 && <Text dimColor>No commits yet.</Text>}
+        {(commits.length > 0 || changes.length > 0) && <Header />}
         {rows}
         {snap.hasMore && (
           <Button

@@ -18,7 +18,7 @@ describe('pickColumns', () => {
   })
 
   test('then the author, then the date', () => {
-    expect(pickColumns(55, GRAPH)).toMatchObject({ showHash: false, showAuthor: false, showDate: true })
+    expect(pickColumns(60, GRAPH)).toMatchObject({ showHash: false, showAuthor: false, showDate: true })
     expect(pickColumns(50, GRAPH)).toMatchObject({ showHash: false, showAuthor: false, showDate: false })
   })
 
@@ -28,8 +28,8 @@ describe('pickColumns', () => {
 
   test('hidden columns give their width back to the message', () => {
     const wide = pickColumns(100, GRAPH)
-    const narrow = pickColumns(55, GRAPH)
+    const narrow = pickColumns(60, GRAPH)
     expect(wide.messageWidth).toBeGreaterThanOrEqual(MIN_MESSAGE_WIDTH)
-    expect(narrow.messageWidth).toBe(55 - GRAPH - GAP - GAP - DATE_WIDTH)
+    expect(narrow.messageWidth).toBe(60 - GRAPH - GAP - GAP - DATE_WIDTH)
   })
 })

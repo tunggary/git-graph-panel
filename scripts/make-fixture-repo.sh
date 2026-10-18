@@ -159,7 +159,11 @@ git branch -q -D feature/remote-only
 commit "feat: 로컬에만 있는 커밋" develop.txt
 commit "docs: 변경 내역 정리" develop.txt
 
-# --- uncommitted changes: M, A, ?? ----------------------------------------------
+# --- a stash (refs/stash); the graph leaves it out, so tests can check that -------
+echo "stashed edit" >> develop.txt
+git stash push -q -m "wip: 보관한 작업"
+
+# --- uncommitted changes: M, A, ?? (after the stash, so they stay) ----------------------------------------------
 echo "local edit" >> develop.txt
 echo "staged" > staged-new.txt
 git add staged-new.txt

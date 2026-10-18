@@ -3,8 +3,10 @@
 export const DATE_WIDTH = 11 // "10-18 16:25"
 export const AUTHOR_WIDTH = 12
 export const HASH_WIDTH = 7
+/** The header `Graph` needs this many cells; a narrower graph is padded to it. */
+export const GRAPH_MIN_WIDTH = 5
 /** Cells between two neighbouring columns. */
-export const GAP = 1
+export const GAP = 2
 /** The message column is never squeezed below this before another column is hidden. */
 export const MIN_MESSAGE_WIDTH = 24
 

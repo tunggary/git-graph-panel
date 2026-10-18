@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { cellsToText, layoutGraph, MAX_LANES } from '../hooks/lib/lanes'
 import { parseLog, parseStatus } from '../hooks/lib/parse'
-import { FIXTURE_HEAD, FIXTURE_LOG, FIXTURE_STATUS } from './fixtures/fixture-log'
+import { FIXTURE_HEAD, FIXTURE_LOG, FIXTURE_STASH, FIXTURE_STATUS } from './fixtures/fixture-log'
 
 // git's output for the repository scripts/make-fixture-repo.sh builds (git log --all --date-order).
 const commits = parseLog(FIXTURE_LOG)
@@ -10,6 +10,14 @@ const changes = parseStatus(FIXTURE_STATUS)
 const graph = layoutGraph([{ hash: 'uncommitted', parents: [FIXTURE_HEAD], isUncommitted: true }, ...commits])
 
 describe('fixture repository', () => {
+  test('the repository has a stash, and the graph leaves it out', () => {
+    expect(FIXTURE_STASH).toMatch(/^[0-9a-f]{40}$/)
+    expect(commits.map(commit => commit.hash)).not.toContain(FIXTURE_STASH)
+    expect(commits.some(commit => /^(On |index on |WIP on )/.test(commit.subject))).toBe(false)
+    expect(commits.some(commit => commit.subject.includes('보관한 작업'))).toBe(false)
+    expect(changes).toHaveLength(3) // the uncommitted changes were made after the stash
+  })
+
   test('parses every commit, with Korean, pipes and quotes intact', () => {
     expect(commits).toHaveLength(71)
     const subjects = commits.map(commit => commit.subject)
@@ -66,33 +74,33 @@ describe('fixture repository', () => {
     "● │   │          feat: release 중 develop 작업",
     "│ │   ●          fix(release): 버전 문자열 수정",
     "│ │   ●          release: 1.0.0 준비",
-    "●─┼─┬─┴─┬─╮      merge: feature/oct-1 feature/oct-2 feature/oct-3 병합",
+    "●─│─┬─┴─┬─╮      merge: feature/oct-1 feature/oct-2 feature/oct-3 병합",
     "│ │ │   │ ●      feat(oct-3): 옥토퍼스 대상 3",
     "│ │ │   ● │      feat(oct-2): 옥토퍼스 대상 2",
     "│ │ ●   │ │      feat(oct-1): 옥토퍼스 대상 1",
-    "●─┼─┴───┴─╯      chore: onboarding 병합 후 정리",
-    "●─┼─╮            merge: feature/onboarding 병합",
+    "●─│─┴───┴─╯      chore: onboarding 병합 후 정리",
+    "●─│─╮            merge: feature/onboarding 병합",
     "● │ │            chore: i18n 병합 후 정리",
-    "●─┼─┼─╮          merge: feature/i18n 병합",
+    "●─│─│─╮          merge: feature/i18n 병합",
     "● │ │ │          chore: export 병합 후 정리",
-    "●─┼─┼─┼─╮        merge: feature/export 병합",
+    "●─│─│─│─╮        merge: feature/export 병합",
     "● │ │ │ │        chore: settings 병합 후 정리",
-    "●─┼─┼─┼─┼─╮      merge: feature/settings 병합",
+    "●─│─│─│─│─╮      merge: feature/settings 병합",
     "● │ │ │ │ │      chore: dashboard 병합 후 정리",
-    "●─┼─┼─┼─┼─┼─╮    merge: feature/dashboard 병합",
+    "●─│─│─│─│─│─╮    merge: feature/dashboard 병합",
     "● │ │ │ │ │ │    chore: notification 병합 후 정리",
-    "●─┼─┼─┼─┼─┼─┼─╮  merge: feature/notification 병합",
+    "●─│─│─│─│─│─│─╮  merge: feature/notification 병합",
     "● │ │ │ │ │ │ │  chore: payment 병합 후 정리",
-    "●─┼─┼─┼─┼─┼─┼─┼… merge: feature/payment 병합",
+    "●─│─│─│─│─│─│─│… merge: feature/payment 병합",
     "● │ │ │ │ │ │ │… chore: search 병합 후 정리",
-    "●─┼─┼─┼─┼─┼─┼─┼… merge: feature/search 병합",
+    "●─│─│─│─│─│─│─│… merge: feature/search 병합",
     "● │ │ │ │ │ │ │… chore: profile 병합 후 정리",
-    "●─┼─┼─┼─┼─┼─┼─┼… merge: feature/profile 병합",
+    "●─│─│─│─│─│─│─│… merge: feature/profile 병합",
     "● │ │ │ │ │ │ │… chore: login 병합 후 정리",
-    "●─┼─┼─┼─┼─┼─┼─┼… merge: feature/login 병합",
+    "●─│─│─│─│─│─│─│… merge: feature/login 병합",
     "│ │ │ │ │ │ │ │● feat(long): 장기 작업 계속",
     "│ │ │ │ │ │ │ │● feat(long): 장기 작업 시작",
-    "●─┼─┼─┼─┼─┼─┼─┼… fix: 파이프(|) 문자 파싱 오류 수정",
+    "●─│─│─│─│─│─│─│… fix: 파이프(|) 문자 파싱 오류 수정",
     "│ │ ● │ │ │ │ │… feat(onboarding): 작업 3",
     "│ │ │ ● │ │ │ │… feat(i18n): 작업 3",
     "│ │ │ │ ● │ │ │… feat(export): 작업 3",
@@ -123,7 +131,7 @@ describe('fixture repository', () => {
     "│ │ │ │ │ │ │ │● feat(search): 초기 구조 | scaffold",
     "│ │ │ │ │ │ │ │● feat(profile): 초기 구조 | scaffold",
     "│ │ │ │ │ │ │ │● feat(login): 초기 구조 | scaffold",
-    "●─┼─┴─┴─┴─┴─┴─┴… chore: develop 브랜치 시작",
+    "●─│─┴─┴─┴─┴─┴─┴… chore: develop 브랜치 시작",
     "●─╯              docs: README 추가",
     "●                chore: 초기 커밋",
     ])
