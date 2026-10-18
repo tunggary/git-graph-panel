@@ -115,6 +115,18 @@ export type GitGraphSnapshot =
       filter: string | null
     }
 
+/** A write action waiting for the person's Run: what planFor made of it. */
+export type GitGraphRunPlan = {
+  kind: 'run'
+  label: string
+  /** git argv, run in order. */
+  commands: string[][]
+  /** Set for an action that cannot be undone: what is lost. */
+  danger?: string
+  network: boolean
+  mayConflict: boolean
+}
+
 /** The action list unfolded under a row (`a`). */
 export type GitGraphActionMenu = {
   /** The row it belongs to: a commit's hash, or 'uncommitted'. */
@@ -127,6 +139,8 @@ export type GitGraphActionMenu = {
   index: number
   /** The text field of an action that needs a name or a message; null while the list shows. */
   form: { key: string; value: string; error?: string } | null
+  /** The command of the chosen item, shown in place of the list until Run or Cancel; null otherwise. */
+  confirm: { key: string; plan: GitGraphRunPlan } | null
 }
 
 /** The branch list unfolded under the toolbar (`l`). */

@@ -117,7 +117,7 @@ Notes:
 - Pull is `git pull --no-rebase --no-edit`; Merge uses `--no-edit`.
 - Push goes to the branch's upstream, or to a new `origin/<name>` that it then tracks.
 - Copy uses the terminal's clipboard (a clipboard tool or OSC 52). If that does not work, the toast shows the value.
-- While a command runs, the status line shows `Running git …`. When it ends, a toast reports the result (such as `Deleted feature/x`), the list closes and the graph refreshes. After the confirmation closes, the pane takes keyboard focus back.
+- While a command runs, the status line shows `Running git …`. When it ends, a toast reports the result (such as `Deleted feature/x`), the list closes and the graph refreshes.
 
 ## Keys
 
@@ -167,6 +167,14 @@ Keys work once the pane has keyboard focus (`ctrl+x tab`, or a click).
 | `1`-`9` | Run the first nine items |
 | `a` | Close the menu |
 
+### Confirmation
+
+| Key | Does |
+| --- | --- |
+| `y` | Run |
+| `q` | Cancel and go back to the action list |
+| `a` | Close the menu |
+
 ### Branch list
 
 | Key | Does |
@@ -182,7 +190,7 @@ Names and messages (Add Tag, Create Branch, Rename, Stash) are typed in a field 
 
 | Key | Does |
 | --- | --- |
-| `Enter` | Continue to the confirmation. An invalid branch or tag name shows an error and stays |
+| `Enter` | Run the action. An invalid branch or tag name shows an error and stays |
 | `Enter` on an empty field | Cancel and go back to the menu (stash messages are optional, so an empty Enter continues there) |
 | `q` or `✕ Cancel` | Go back to the menu (after leaving the field) |
 
@@ -217,12 +225,10 @@ Local operations (checkout, merge, reset, deleting a local branch) are not restr
 
 ## Safety
 
-![Confirmation for a hard reset: a ⚠ Dangerous dialog with Cancel first, next to the action menu](docs/images/confirm.png)
-
-- Every write action ends in a confirmation that shows the full command, with `Run` and `Cancel`. Only Copy runs without asking.
-- Actions that cannot be undone open with `⚠` and what is lost, and list `Cancel` before `Run`. These are Reset (hard), Discard all changes, Discard and remove untracked files, Clean untracked files, Delete remote branch, Delete tag (also on origin), Force push, and deleting an unmerged branch (`-D`). Deleting a merged branch uses `-d`.
-- Anything other than `Run` (Cancel, dismissing the dialog) runs nothing and goes back to the action list, so you can pick another item.
-- Branch and tag names are checked with `git check-ref-format` before the confirmation.
+- Quick actions run at once, with no confirmation, because they are local and easy to undo: Add Tag, Create Branch, Create Branch and check out, Checkout (commit, local branch, remote branch), Rename and Stash (both). Copy runs at once too. Every other write action shows its full command inside the pane, in place of the action list, with `y: Run` and `q: Cancel`.
+- Actions that cannot be undone open that confirmation with `⚠` and what is lost, and list `Cancel` before `Run`. These are Reset (hard), Discard all changes, Discard and remove untracked files, Clean untracked files, Delete remote branch, Delete tag (also on origin), Force push, and deleting an unmerged branch (`-D`). Deleting a merged branch uses `-d`.
+- `Cancel` runs nothing and goes back to the action list, so you can pick another item.
+- Branch and tag names are checked with `git check-ref-format` before the action runs.
 - Commands are argument lists, never joined into a shell string, so a name or message cannot be read as anything else.
 - Commands run with `GIT_TERMINAL_PROMPT=0` (git never asks for credentials here) and `GIT_EDITOR=true`. Network commands stop after 120 s and others after 30 s.
 - If a merge, rebase, cherry-pick, revert or pull stops on conflicts, a toast says `conflict: resolve then continue`.
@@ -321,7 +327,7 @@ claude plugin test .
 
 - A hotkey is one lowercase letter or digit, which is why Find is `s` and not `/`.
 - While a person holds the pane, a plugin cannot bring another pane to the front, so the diff view lives in the same pane.
-- A hook has a 10 s budget, so long work (network git, a confirmation) is detached from the handler that starts it.
+- A hook has a 10 s budget, so long work (network git) is detached from the handler that starts it.
 - A pane may carry 2 MiB of images. Pictures stop at 1.5 MiB, from the top down; rows below are drawn as text.
 
 ### Workflow

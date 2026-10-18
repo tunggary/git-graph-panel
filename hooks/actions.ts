@@ -5,7 +5,7 @@ import type { EngineInterface } from 'claude-code'
 
 import type { GitGraphFile } from '../types'
 import { EMPTY_TREE, UNCOMMITTED, fetchAll, loadChangedFiles, loadCommitDetails, loadFileDiff, loadSnapshot } from './lib/git'
-import { checkRefArgv, displayCommand, factsOf, nameError, planFor, rowMenu } from './lib/commands'
+import { checkRefArgv, displayCommand, factsOf, isQuick, nameError, planFor, rowMenu } from './lib/commands'
 import type { MenuItem, Operation, Plan, Prompt } from './lib/commands'
 import { prepareDiff } from './lib/diff'
 import { findMatches, stepMatch } from './lib/search'
@@ -384,7 +384,7 @@ export async function toggleActions($: Dollar, canInput: boolean): Promise<void>
   const operation = hash === UNCOMMITTED ? await readOperation($) : null
   await update($, cursor, () => hash)
   await update($, branchMenu, () => null)
-  await update($, actionMenu, () => ({ hash, operation, canInput, index: 0, form: null }))
+  await update($, actionMenu, () => ({ hash, operation, canInput, index: 0, form: null, confirm: null }))
   await reveal($, `actions:${hash}`)
 }
 
@@ -397,7 +397,7 @@ function itemsOfMenu(snap: Parameters<typeof rowMenu>[0], menu: { hash: string; 
 export async function moveMenuCursor($: Dollar, step: 1 | -1): Promise<void> {
   const snap = await read($, snapshot)
   const menu = await read($, actionMenu)
-  if (snap.kind !== 'ready' || menu === null || menu.form !== null) return
+  if (snap.kind !== 'ready' || menu === null || menu.form !== null || menu.confirm !== null) return
   const items = itemsOfMenu(snap, menu, [])
   const index = Math.min(items.length - 1, Math.max(0, menu.index + step))
   await update($, actionMenu, now => (now === null ? now : { ...now, index }))
@@ -409,7 +409,7 @@ export async function moveMenuCursor($: Dollar, step: 1 | -1): Promise<void> {
 export async function runMenuCursor($: Dollar, protectedBranches: readonly string[]): Promise<void> {
   const snap = await read($, snapshot)
   const menu = await read($, actionMenu)
-  if (snap.kind !== 'ready' || menu === null || menu.form !== null) return
+  if (snap.kind !== 'ready' || menu === null || menu.form !== null || menu.confirm !== null) return
   const item = itemsOfMenu(snap, menu, protectedBranches)[menu.index]
   if (item) await chooseAction($, item.key, protectedBranches)
 }
@@ -502,7 +502,7 @@ async function factsFor($: Dollar, snap: Parameters<typeof factsOf>[0], menu: { 
   return facts
 }
 
-/** Plans the item, asks for the go-ahead, runs it, reports, refreshes and closes the list. */
+/** Plans the item. A quick one runs at once; any other shows its command in the pane and waits for `confirmRun`. */
 async function perform($: Dollar, item: MenuItem, input: string, protectedBranches: readonly string[]): Promise<void> {
   const snap = await read($, snapshot)
   const menu = await read($, actionMenu)
@@ -519,36 +519,29 @@ async function perform($: Dollar, item: MenuItem, input: string, protectedBranch
     await update($, actionMenu, () => null)
     return
   }
-  if (!(await confirmRun($, plan))) {
-    await cancelActionForm($) // back to the list: another item may be the one wanted
+  if (isQuick(item.target.kind, item.id)) {
+    await execute($, plan)
     return
   }
-  await runPlan($, plan)
+  await update($, actionMenu, now => (now === null ? now : { ...now, form: null, confirm: { key: item.key, plan } }))
+}
+
+/** Runs the plan, reports, refreshes. The list closes first, so a second press cannot run it twice. */
+async function execute($: Dollar, plan: Extract<Plan, { kind: 'run' }>): Promise<void> {
   await update($, actionMenu, () => null)
+  await runPlan($, plan)
   await refresh($)
 }
 
-/** Every write goes through this question; a risky one opens with the warning and has Cancel first. */
-async function confirmRun($: Dollar, plan: Extract<Plan, { kind: 'run' }>): Promise<boolean> {
-  const commands = plan.commands.map(displayCommand).join('\n')
-  const question = plan.danger === undefined ? `Run this?\n${commands}` : `⚠ ${plan.danger}\nRun this?\n${commands}`
-  try {
-    const answer = await $.ui.ask(question, { options: plan.danger === undefined ? ['Run', 'Cancel'] : ['Cancel', 'Run'], header: plan.danger === undefined ? 'Git' : '⚠ Dangerous' })
-    return answer === 'Run'
-  } catch {
-    return false // dismissed
-  } finally {
-    await takeFocusBack($)
-  }
+/** `y` / Run on the confirmation. */
+export async function confirmRun($: Dollar): Promise<void> {
+  const plan = (await read($, actionMenu))?.confirm?.plan
+  if (plan !== undefined) detach($, () => execute($, plan))
 }
 
-/** The dialog hands the keys to the prompt when it closes; the pane asks for them back (refused while text is being typed). */
-async function takeFocusBack($: Dollar): Promise<void> {
-  try {
-    await $.ui.open({ id: PANE, title: 'Git Graph', focus: true })
-  } catch {
-    // The pane stays as it is; ctrl+x tab focuses it.
-  }
+/** `q` / Cancel on the confirmation: nothing runs, back to the list (another item may be the one wanted). */
+export function cancelConfirm($: Dollar) {
+  return update($, actionMenu, menu => (menu === null ? menu : { ...menu, confirm: null }))
 }
 
 /** Runs the commands in order with a status line; the first failure ends it with a toast. */
