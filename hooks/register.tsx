@@ -135,8 +135,9 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
-    const Image = 'Image' in ui ? ui.Image : null // only the terminal surface draws pictures
-    const Input = 'Input' in ui ? ui.Input : null // not every surface has a text field
+    // The table names every element on every surface (one a surface lacks draws as nothing), so ask the surface.
+    const Image = e.surface === 'terminal' && 'Image' in ui ? ui.Image : null // only the terminal draws pictures
+    const Input = e.surface !== 'mobile' && 'Input' in ui ? ui.Input : null // the mobile app draws no text field
     const snap = await read($, snapshot)
     const remotes = await read($, isRemotesShown)
     const changesOpen = await read($, isChangesOpen)
@@ -434,7 +435,7 @@ export const register: Register = (on, options) => {
     const actionLines = () => {
       const lines: ReturnType<typeof Graph>[] = []
       if (menu === null) return lines
-      const sections = rowMenu(snap, menu.hash, menu.operation, protectedBranches, Input !== null)
+      const sections = rowMenu(snap, menu.hash, menu.operation, protectedBranches, menu.canInput)
       if (menu.form && Input) {
         const item = sections.flatMap(section => section.items).find(one => one.key === menu.form?.key)
         if (item?.prompt) {
@@ -569,7 +570,7 @@ export const register: Register = (on, options) => {
       button('cursor-down', 'j', '↓', () => (branches ? moveBranchCursor($, 1) : menu ? moveMenuCursor($, 1) : moveCursor($, 1)), true),
       button('cursor-up', 'k', '↑', () => (branches ? moveBranchCursor($, -1) : menu ? moveMenuCursor($, -1) : moveCursor($, -1)), true),
       button('details', 'o', branches ? 'Pick' : menu ? 'Run' : 'Details', () => (branches ? pickBranchCursor($) : menu ? runMenuCursor($, protectedBranches) : toggleAtCursor($)), true),
-      button('actions', 'a', menu ? 'Close' : 'Actions', () => toggleActions($), menu === null),
+      button('actions', 'a', menu ? 'Close' : 'Actions', () => toggleActions($, Input !== null), menu === null),
       ...(openDetails !== null ? [button('compare', 'x', 'Compare', () => compareAtCursor($), true)] : []),
       ...(hasQuery ? [button('match-next', 'n', 'Next', () => stepFind($, 1), true), button('match-prev', 'p', 'Prev', () => stepFind($, -1), true)] : []),
     ]
