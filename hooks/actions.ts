@@ -367,8 +367,11 @@ async function readOperation($: Dollar): Promise<Operation | null> {
   return null
 }
 
-/** `a`: opens the action list under the cursor's row (the top row when there is no cursor), or closes it. */
-export async function toggleActions($: Dollar): Promise<void> {
+/**
+ * `a`: opens the action list under the cursor's row (the top row when there is no cursor), or closes it.
+ * `canInput`: the surface has a text field; without one the items that ask for a name are left out.
+ */
+export async function toggleActions($: Dollar, canInput: boolean): Promise<void> {
   const snap = await read($, snapshot)
   const order = await rowOrder($)
   const at = await read($, cursor)
@@ -381,13 +384,13 @@ export async function toggleActions($: Dollar): Promise<void> {
   const operation = hash === UNCOMMITTED ? await readOperation($) : null
   await update($, cursor, () => hash)
   await update($, branchMenu, () => null)
-  await update($, actionMenu, () => ({ hash, operation, index: 0, form: null }))
+  await update($, actionMenu, () => ({ hash, operation, canInput, index: 0, form: null }))
   await reveal($, `actions:${hash}`)
 }
 
 /** The items of the open list, top to bottom, sections flattened. */
-function itemsOfMenu(snap: Parameters<typeof rowMenu>[0], menu: { hash: string; operation: Operation | null }, protectedBranches: readonly string[]): MenuItem[] {
-  return rowMenu(snap, menu.hash, menu.operation, protectedBranches, true).flatMap(section => section.items)
+function itemsOfMenu(snap: Parameters<typeof rowMenu>[0], menu: { hash: string; operation: Operation | null; canInput: boolean }, protectedBranches: readonly string[]): MenuItem[] {
+  return rowMenu(snap, menu.hash, menu.operation, protectedBranches, menu.canInput).flatMap(section => section.items)
 }
 
 /** `j` / `k` while the list is open: the highlight moves, stopping at the ends. */
@@ -424,7 +427,7 @@ async function findItem($: Dollar, key: string, protectedBranches: readonly stri
   const snap = await read($, snapshot)
   const menu = await read($, actionMenu)
   if (snap.kind !== 'ready' || menu === null) return null
-  const item = rowMenu(snap, menu.hash, menu.operation, protectedBranches, true).flatMap(section => section.items).find(one => one.key === key)
+  const item = itemsOfMenu(snap, menu, protectedBranches).find(one => one.key === key)
   return item === undefined ? null : { snap, menu, item }
 }
 

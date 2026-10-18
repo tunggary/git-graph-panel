@@ -234,6 +234,16 @@ describe('git graph pane', () => {
     await ui.unmount()
   })
 
+  test('the desktop app gets the text graph: only the terminal draws pictures', async ($, on) => {
+    fakeGit(on, { env: { TERM_PROGRAM: 'ghostty' } })
+    fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', requestId: PANE, props: paneProps(140), viewport: { columns: 140, rows: 40 } })
+
+    expect(await ui.find({ type: 'Text', text: /●/ })).toBeDefined() // the graph column is drawn in text, not left empty
+    await ui.unmount()
+  })
+
   test('tmux gets the text graph even inside ghostty', async ($, on) => {
     fakeGit(on, { env: { TERM_PROGRAM: 'ghostty', TMUX: '/tmp/tmux-501/default,1,0' } })
     fakePanes(on)

@@ -3,7 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { GitAnswer } from './helpers'
-import { RUN, commits, fakeAsk, fakeGit, fakePanes, fakeScreen, logCalls, mountAt } from './helpers'
+import { PANE, PLUGIN, RUN, commits, fakeAsk, fakeGit, fakePanes, fakeScreen, logCalls, mountAt, paneProps } from './helpers'
 
 const tagged = commits.find(commit => commit.refs.some(ref => ref.name === 'v1.0.1'))! // v1.0.1, origin/main, main
 const hotfix = commits.find(commit => commit.refs.some(ref => ref.name === 'hotfix/1.0.1'))! // origin/hotfix/1.0.1, hotfix/1.0.1
@@ -161,6 +161,20 @@ describe('the menu cursor', () => {
     await $.command.run(RUN)
     const ui = await openActions($, plain.hash)
     expect(await ui.find({ key: 'diff:src/app.ts' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('without a text field, o runs the item the highlight is on', async ($, on) => {
+    const { asked } = setup($, on, git(), () => 'Cancel')
+    await $.command.run(RUN)
+    const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'mobile', component: 'Pane', requestId: PANE, props: paneProps(140), viewport: { columns: 140, rows: 40 } })
+    await ui.press({ key: `select:${plain.hash}` })
+    await ui.press({ key: 'actions' })
+    expect(await ui.find({ key: 'action:commit#tag' })).toBeUndefined() // needs a name: not on this surface
+    expect(await ui.find({ key: 'find' })).toBeUndefined() // no field to type into either
+    expect(JSON.stringify(await ui.find({ key: 'action:commit#checkout' }))).toContain('"inverse":true')
+    await ui.press({ key: 'details' }) // o
+    expect(asked[0]?.question).toContain(`git checkout --detach ${plain.hash}`)
     await ui.unmount()
   })
 })
