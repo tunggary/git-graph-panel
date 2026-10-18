@@ -13,6 +13,7 @@ A Claude Code mod that puts a [Git Graph](https://marketplace.visualstudio.com/i
 - Claude Code (tested on 2.1.302)
 - git
 - For the curved image graph: kitty, Ghostty or WezTerm. Other terminals, and anything inside tmux, get a text graph automatically.
+- In the desktop app the graph is always text. The mobile app has no text field, so Find and the actions that ask for a name (Add Tag, Create Branch, Rename, Stash) are not offered there.
 
 ## Install
 
@@ -35,23 +36,31 @@ While installing, Claude Code asks whether to add the marketplace (answer `y`) a
 ## Quick start
 
 1. Run `claude` inside a git repository.
-2. The pane opens by itself. If it did not, run `/graph`.
+2. The pane opens by itself. If it did not, run `/graph`. Run `/graph` again to close it.
 3. Press `ctrl+x tab` to move keyboard focus to the pane.
 4. Press `j` / `k` to move the cursor between commits, and `o` to open the details of the commit under the cursor.
 5. Press `a` to open the action menu for the row (checkout, cherry-pick, tag, and more).
 
 ## Features
 
+### Toolbar
+
+The top of the pane is a row of buttons, each written as key and label: `l: Branches: develop`, `b: ☑ remote`, `s: Find`, `f: Fetch`, `r: Refresh`, `g: Graph style: image`, then `j: ↓`, `k: ↑`, `o: Details` and `a: Actions`. A button does the same as its key, so everything below works with the mouse too.
+
+- Labels follow what is open: with the Branches list open, `o` reads `Pick`; with the action menu open, `o` reads `Run` and `a` reads `Close`.
+- `x: Compare` appears only while a commit's details are open, and `n: Next` / `p: Prev` only while a Find has matches.
+- In a pane narrower than 100 columns the buttons wrap onto more lines and the style button reads just `image` or `text`.
+
 ### Graph
 
-- **Rows**: one per commit of `git log --branches --remotes --tags HEAD --date-order`, under a header `Graph  Description  Date  Author  Commit`. The first page is 50 commits; **Load more** (`m`) adds 50 each time.
+- **Rows**: one per commit of `git log --branches --remotes --tags HEAD --date-order`, under a header `Graph  Description  Date  Author  Commit`. The first page is 50 commits; **Load more** (`m`) adds 50 each time. A repository without commits shows `No commits yet.`
 - **Two styles**: `image` draws each row as a small PNG (straight lines, smooth curves, filled nodes, an open ring for the checked-out commit); `text` uses box-drawing characters. Press `g` to switch; the choice is remembered. The default is `image` on kitty, Ghostty and WezTerm and `text` elsewhere, always `text` inside tmux.
 - **Lanes** use Git Graph's colors. As many lanes are drawn as fit in 40% of the pane width (two cells per lane, at least 8). Further lanes fold into a `…` at the right edge.
 - **Labels** are colored pills in the lane color of their commit. A remote-only branch (`origin/x`) is a darker tone, tags are amber, a detached `HEAD` is purple, and the checked-out branch is bold. A local branch that a remote also has is one pill: `develop │ origin`.
 - **Merge commits** have a dimmed description.
 - **Columns** are graph, labels and message, date (`10-18 16:25`, local time), author and short hash. In a narrow pane the hash is hidden first, then the author, then the date.
 - **Uncommitted Changes (n)** is a row on top of `HEAD`, hidden when the working tree is clean. Press it (or `c`) to unfold the files with their status (`M` `A` `D` `R` `??`).
-- **Remote toggle** `☑ remote` (`b`) is on by default. Off, the graph and the Branches list show local branches only.
+- **Remote toggle** `☑ remote` (`b`) is on by default. Off, the graph and the Branches list show local branches only. If a remote branch was picked in Branches, the filter goes back to `Show All`.
 - **Stashes** and other tools' private refs (such as `refs/cmux/*`) are not shown, as in Git Graph.
 - **Refresh**: the pane reloads when it opens, when you press `r`, and after every Bash tool call whose command contains `git`. There is no polling, so a change made in another terminal appears after the next refresh.
 
@@ -63,7 +72,7 @@ Press `o` (or click the description) to unfold a commit under its row. One commi
 
 - Full hash and parents, author with email and date, and the committer when different.
 - The whole commit message.
-- Changed files, such as `M src/app.ts +12 -3`, with `bin` for binary files and `R old → new` for renames. A merge is compared with its first parent and a root commit with the empty tree. Past 200 files, the rest is summed up in one line.
+- Changed files under a summary line such as `3 files changed  +15 -4`, each like `M src/app.ts +12 -3`, with `bin` for binary files and `R old → new` for renames. A merge is compared with its first parent and a root commit with the empty tree. Past 200 files, the rest is summed up in one line.
 
 Press a file (click it, or press its digit `1`-`9` for the first nine) to open its diff. The diff takes over the whole pane: a bar with `h: ← Back`, the file, `(2/5)`, `p: Prev` and `n: Next`; the range (`abc1234 (vs def5678)`); a strip of files; then the colored unified diff. `n` / `p` step through the files, `h` returns to the graph with your cursor, details and Find as they were.
 
@@ -77,7 +86,7 @@ With a commit's details open, move the cursor to another commit (or to Uncommitt
 
 ### Branches, Find, Fetch
 
-- **Branches** (`l`, the button reads `Branches: <current>`) opens a list under the toolbar: `Show All` or one local or remote branch. `j` / `k` move the highlight, `o` picks it, `1`-`9` pick the first nine entries, `l` closes. The graph then shows only the commits reachable from that branch. If the branch disappears (for example pruned by a fetch), the filter falls back to `Show All`. The Uncommitted Changes row is hidden when the chosen branch does not contain `HEAD`.
+- **Branches** (`l`, the button reads `Branches: <current>`) opens a list under the toolbar: `Show All` or one local or remote branch. `j` / `k` move the highlight, `o` picks it, `1`-`9` pick the first nine entries, `l` closes; an entry can also be clicked. Opening the list closes any open details, comparison or action menu. The graph then shows only the commits reachable from that branch. If the branch disappears (for example pruned by a fetch), the filter falls back to `Show All`. The Uncommitted Changes row is hidden when the chosen branch does not contain `HEAD`.
 - **Find** (`s`) opens a field. As you type, matches are highlighted in the loaded commits' message, author and hash, and branch and tag names are underlined. A counter such as `3/12 matches` shows where the cursor is. Enter keeps the highlight and moves to the first match; `n` / `p` step through matches (wrapping). Empty the field or press `✕ Clear` to drop it. Only commits that are already loaded are searched.
 - **Fetch** (`f`) runs `git fetch --all --prune` without asking, shows `Fetching…` in the status line, toasts the result and refreshes.
 
@@ -85,7 +94,7 @@ With a commit's details open, move the cursor to another commit (or to Uncommitt
 
 ![Action menu open under a commit row, listing commit and branch actions](docs/images/actions.png)
 
-Press `a` to open the action list under the cursor's row (the top row if there is no cursor). The list has a section for the commit and one for each label on the row. While it is open, `j` / `k` move the highlight, `o` runs it, `1`-`9` run the first nine items, and `a` closes the list.
+Press `a` to open the action list under the cursor's row (the top row if there is no cursor). The list has a section for the commit and one for each label on the row. While it is open, `j` / `k` move the highlight, `o` runs it, `1`-`9` run the first nine items, and `a` closes the list. Items can also be clicked. Clicking another row closes the list.
 
 | Target | Actions |
 | --- | --- |
@@ -108,6 +117,7 @@ Notes:
 - Pull is `git pull --no-rebase --no-edit`; Merge uses `--no-edit`.
 - Push goes to the branch's upstream, or to a new `origin/<name>` that it then tracks.
 - Copy uses the terminal's clipboard (a clipboard tool or OSC 52). If that does not work, the toast shows the value.
+- While a command runs, the status line shows `Running git …`. When it ends, a toast reports the result (such as `Deleted feature/x`), the list closes and the graph refreshes. After the confirmation closes, the pane takes keyboard focus back.
 
 ## Keys
 
@@ -168,7 +178,7 @@ Keys work once the pane has keyboard focus (`ctrl+x tab`, or a click).
 
 ### Text field
 
-Names and messages (Add Tag, Create Branch, Rename, Stash) are typed in a field that replaces the menu. The field takes the keyboard when it opens, so other hotkeys (including `q`) reach the pane only after you leave it.
+Names and messages (Add Tag, Create Branch, Rename, Stash) are typed in a field that replaces the menu. Rename starts with the current name filled in. The field takes the keyboard when it opens, so other hotkeys (including `q`) reach the pane only after you leave it.
 
 | Key | Does |
 | --- | --- |
@@ -180,6 +190,7 @@ Names and messages (Add Tag, Create Branch, Rename, Stash) are typed in a field 
 
 | Key | Does |
 | --- | --- |
+| `/graph` | Open or close the pane (typed at the prompt) |
 | `ctrl+x tab` | Grab or release the pane |
 | Arrow keys | Scroll the pane |
 | `Esc` | From the pane back to the prompt |
@@ -210,7 +221,7 @@ Local operations (checkout, merge, reset, deleting a local branch) are not restr
 
 - Every write action ends in a confirmation that shows the full command, with `Run` and `Cancel`. Only Copy runs without asking.
 - Actions that cannot be undone open with `⚠` and what is lost, and list `Cancel` before `Run`. These are Reset (hard), Discard all changes, Discard and remove untracked files, Clean untracked files, Delete remote branch, Delete tag (also on origin), Force push, and deleting an unmerged branch (`-D`). Deleting a merged branch uses `-d`.
-- Anything other than `Run` (Cancel, dismissing the dialog) runs nothing.
+- Anything other than `Run` (Cancel, dismissing the dialog) runs nothing and goes back to the action list, so you can pick another item.
 - Branch and tag names are checked with `git check-ref-format` before the confirmation.
 - Commands are argument lists, never joined into a shell string, so a name or message cannot be read as anything else.
 - Commands run with `GIT_TERMINAL_PROMPT=0` (git never asks for credentials here) and `GIT_EDITOR=true`. Network commands stop after 120 s and others after 30 s.
@@ -229,6 +240,9 @@ Images need kitty, Ghostty or WezTerm, and are never used inside tmux. Press `g`
 
 **Circles look like ovals.**
 The pictures assume a cell twice as tall as it is wide (10 x 20 px). Other proportions stretch them. Press `g` for the text graph.
+
+**`git failed: …` appears.**
+That is git's own error, shown in a toast or in place of the graph, the details or the diff. Fix the cause in your shell and press `r`.
 
 **I cannot leave an input field.**
 Press `Enter` on the empty field, or clear the field first. Hotkeys such as `q` do not reach the pane while a field has the keyboard.
