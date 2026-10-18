@@ -1,0 +1,13 @@
+{
+  "name": "git-graph-panel",
+  "description": "Git Graph-style commit graph pane for Claude Code",
+  "owner": {
+    "name": "tunggary"
+  },
+  "plugins": [
+    {
+      "name": "git-graph-panel",
+      "source": "./"
+    }
+  ]
+}
