@@ -9,7 +9,7 @@ import { checkRefArgv, displayCommand, factsOf, nameError, planFor, rowMenu } fr
 import type { MenuItem, Operation, Plan, Prompt } from './lib/commands'
 import { prepareDiff } from './lib/diff'
 import { findMatches, stepMatch } from './lib/search'
-import { PAGE_SIZE, PANE } from './state'
+import { ALL_BRANCHES, PAGE_SIZE, PANE } from './state'
 
 type Dollar = EngineInterface
 
@@ -27,6 +27,7 @@ const search = atom({ plugin: 'git-graph-panel', key: 'search' } as const, { isO
 const isFetching = atom({ plugin: 'git-graph-panel', key: 'isFetching' } as const, false)
 const diff = atom({ plugin: 'git-graph-panel', key: 'diff' } as const, { kind: 'idle' })
 const actionMenu = atom({ plugin: 'git-graph-panel', key: 'actionMenu' } as const, null)
+const branchMenu = atom({ plugin: 'git-graph-panel', key: 'branchMenu' } as const, null)
 
 /** The element key of a graph row, which `$.ui.scroll` addresses. */
 export const rowKey = (hash: string): string => (hash === UNCOMMITTED ? 'uncommitted' : `commit:${hash}`)
@@ -115,6 +116,7 @@ export function detach($: Dollar, work: () => Promise<unknown>): void {
 export async function selectRow($: Dollar, hash: string): Promise<void> {
   await update($, cursor, () => hash)
   await update($, actionMenu, () => null)
+  await update($, branchMenu, () => null)
   detach($, () => toggleDetails($, hash))
 }
 
@@ -222,6 +224,50 @@ async function reloadDiff($: Dollar): Promise<void> {
   } catch {
     // git failed this time; the diff on screen stays.
   }
+}
+
+/** What the branch list offers, top to bottom: `Show All`, then the local and (when shown) the remote branches. */
+export function branchChoices(branches: readonly { ref: string; name: string; kind: 'branch' | 'remote' }[], isRemotesShown: boolean) {
+  return [{ value: ALL_BRANCHES, label: 'Show All' }, ...branches.filter(branch => isRemotesShown || branch.kind === 'branch').map(branch => ({ value: branch.ref, label: branch.name }))]
+}
+
+/** `l`: opens the branch list (the highlight on the current filter) or closes it. It shares the pane's keys with the details and the action list, so it closes them. */
+export async function toggleBranches($: Dollar): Promise<void> {
+  if ((await read($, branchMenu)) !== null) {
+    await update($, branchMenu, () => null)
+    return
+  }
+  const snap = await read($, snapshot)
+  if (snap.kind !== 'ready') return
+  const choices = branchChoices(snap.branches, await read($, isRemotesShown))
+  const index = Math.max(0, choices.findIndex(choice => choice.value === (snap.filter ?? ALL_BRANCHES)))
+  await update($, actionMenu, () => null)
+  await update($, details, () => null)
+  await update($, comparison, () => null)
+  await update($, branchMenu, () => ({ index }))
+}
+
+/** `j` / `k` while the branch list is open. */
+export async function moveBranchCursor($: Dollar, step: 1 | -1): Promise<void> {
+  const snap = await read($, snapshot)
+  if (snap.kind !== 'ready') return
+  const last = branchChoices(snap.branches, await read($, isRemotesShown)).length - 1
+  await update($, branchMenu, menu => (menu === null ? menu : { index: Math.min(last, Math.max(0, menu.index + step)) }))
+}
+
+/** A branch of the list picked (a click, a digit, or `o` on the highlight): filters the log and closes the list. */
+export async function pickBranch($: Dollar, value: string): Promise<void> {
+  await update($, branchMenu, () => null)
+  await setBranchFilter($, value === ALL_BRANCHES ? null : value)
+}
+
+/** `o` while the branch list is open. */
+export async function pickBranchCursor($: Dollar): Promise<void> {
+  const snap = await read($, snapshot)
+  const menu = await read($, branchMenu)
+  if (snap.kind !== 'ready' || menu === null) return
+  const choice = branchChoices(snap.branches, await read($, isRemotesShown))[menu.index]
+  if (choice) await pickBranch($, choice.value)
 }
 
 /** Restricts the log to one branch (a full ref), or to all with null. */
@@ -334,6 +380,7 @@ export async function toggleActions($: Dollar): Promise<void> {
   }
   const operation = hash === UNCOMMITTED ? await readOperation($) : null
   await update($, cursor, () => hash)
+  await update($, branchMenu, () => null)
   await update($, actionMenu, () => ({ hash, operation, index: 0, form: null }))
   await reveal($, `actions:${hash}`)
 }

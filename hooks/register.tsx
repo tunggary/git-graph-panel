@@ -10,15 +10,18 @@ import {
   compareAtCursor,
   fetchRemotes,
   gotoDiff,
+  branchChoices,
+  moveBranchCursor,
   moveCursor,
   moveMenuCursor,
+  pickBranch,
+  pickBranchCursor,
   openFind,
   pointLabel,
   refresh,
   runMenuCursor,
   selectRow,
   setActionInput,
-  setBranchFilter,
   setQuery,
   showDiff,
   stepDiff,
@@ -26,6 +29,7 @@ import {
   submitActionForm,
   submitFind,
   toggleActions,
+  toggleBranches,
   toggleAtCursor,
   toggleRemotes,
 } from './actions'
@@ -42,7 +46,7 @@ import type { RowImage } from './lib/raster'
 import { containsQuery, findMatches, highlightParts } from './lib/search'
 import { cellWidth, packRows, truncate, truncateStart, wrap } from './lib/text'
 import { supportsImages } from './lib/terminal'
-import { ALL_BRANCHES, PAGE_SIZE } from './state'
+import { PAGE_SIZE } from './state'
 
 
 // The state reference scan reads atoms only where `read` and `update` are called, so each file that uses them declares them.
@@ -59,6 +63,7 @@ const search = atom({ plugin: 'git-graph-panel', key: 'search' } as const, { isO
 const isFetching = atom({ plugin: 'git-graph-panel', key: 'isFetching' } as const, false)
 const diff = atom({ plugin: 'git-graph-panel', key: 'diff' } as const, { kind: 'idle' })
 const actionMenu = atom({ plugin: 'git-graph-panel', key: 'actionMenu' } as const, null)
+const branchMenu = atom({ plugin: 'git-graph-panel', key: 'branchMenu' } as const, null)
 
 // Spelled out here, not imported: `claude plugin validate` reads a `ui.render` matcher's requestId from a const of this file.
 const PANE = 'git-graph'
@@ -131,8 +136,7 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
     const Image = 'Image' in ui ? ui.Image : null // only the terminal surface draws pictures
-    const Select = 'Select' in ui ? ui.Select : null // and not every surface has a picker or a field
-    const Input = 'Input' in ui ? ui.Input : null
+    const Input = 'Input' in ui ? ui.Input : null // not every surface has a text field
     const snap = await read($, snapshot)
     const remotes = await read($, isRemotesShown)
     const changesOpen = await read($, isChangesOpen)
@@ -144,6 +148,7 @@ export const register: Register = (on, options) => {
     const fetching = await read($, isFetching)
     const view = await read($, diff)
     const menu = await read($, actionMenu)
+    const branches = await read($, branchMenu)
 
     if (view.kind === 'open') {
       // The diff replaces the whole pane (no pictures here, so the Image budget is untouched).
@@ -350,7 +355,7 @@ export const register: Register = (on, options) => {
     /** A file of a commit or comparison: a Button that opens its diff in the Diff pane. */
     const FileButton = ({ files, index, from, to, range }: { files: readonly GitGraphFile[]; index: number; from: string; to: string; range: string }) => {
       const file = files[index]!
-      const hotkey = index < 9 && menu === null ? String(index + 1) : undefined // the first nine files answer to a digit (the open action list has them then)
+      const hotkey = index < 9 && menu === null && branches === null ? String(index + 1) : undefined // the first nine files answer to a digit (the open action list has them then)
       const stats = file.added === null ? 'bin' : `+${file.added} -${file.deleted}`
       const path = file.oldPath === undefined ? file.path : `${file.oldPath} → ${file.path}`
       return (
@@ -512,9 +517,28 @@ export const register: Register = (on, options) => {
     const matchAt = cursorHash === null ? -1 : matches.indexOf(cursorHash)
     const matchText =
       matches.length === 0 ? 'No matches' : matchAt >= 0 ? `${matchAt + 1}/${matches.length} matches` : `${matches.length} matches`
-    const branchOptions = snap.branches
-      .filter(branch => remotes || branch.kind === 'branch')
-      .map(branch => ({ value: branch.ref, label: branch.name }))
+    const choices = branchChoices(snap.branches, remotes)
+    const branchAt = branches === null ? 0 : Math.min(branches.index, choices.length - 1)
+    /** The branch list under the toolbar: a window of at most 10 entries around the highlight. */
+    const BRANCH_ROWS = 10
+    const branchFrom = Math.min(Math.max(0, branchAt - 4), Math.max(0, choices.length - BRANCH_ROWS))
+    const branchLines = () => {
+      const lines: ReturnType<typeof Graph>[] = [<Text dimColor>j/k: Select  o: Pick  1-9  l: Close</Text>]
+      if (branchFrom > 0) lines.push(<Text dimColor>{`  … ${branchFrom} more above`}</Text>)
+      choices.slice(branchFrom, branchFrom + BRANCH_ROWS).forEach((choice, offset) => {
+        const at = branchFrom + offset
+        const hotkey = at < 9 ? String(at + 1) : undefined
+        const isCurrent = choice.value === (snap.filter ?? '*')
+        lines.push(
+          <Button key={`branch:${choice.value}`} plain hotkey={hotkey} onPress={() => pickBranch($, choice.value)}>
+            <Text inverse={at === branchAt}>{`${hotkey === undefined ? '   ' : ''}${isCurrent ? '●' : ' '} ${choice.label}`}</Text>
+          </Button>,
+        )
+      })
+      const below = choices.length - (branchFrom + BRANCH_ROWS)
+      if (below > 0) lines.push(<Text dimColor>{`  … ${below} more below`}</Text>)
+      return lines
+    }
 
     // The toolbar is packed into explicit rows (a wrapping Box would stretch its lines apart with blank rows) and
     // takes shorter labels in a narrow pane.
@@ -527,22 +551,7 @@ export const register: Register = (on, options) => {
       node: <Button key={key} plain dimColor={isDim} hotkey={hotkey} label={label} onPress={onPress} />,
     })
     const items: Item[] = [
-      ...(Select
-        ? [
-            {
-              width: 'Branches'.length + 2 + cellWidth(currentBranch) + 2,
-              node: (
-                <Select
-                  key="branch"
-                  label="Branches"
-                  options={[{ value: ALL_BRANCHES, label: 'Show All' }, ...branchOptions]}
-                  value={snap.filter ?? ALL_BRANCHES}
-                  onSelect={value => setBranchFilter($, value === ALL_BRANCHES ? null : value)}
-                />
-              ),
-            },
-          ]
-        : []),
+      button('branch', 'l', `Branches: ${truncate(currentBranch, 24)}`, () => toggleBranches($)),
       button('remotes', 'b', `${remotes ? '☑' : '☐'} remote`, () => toggleRemotes($)),
       ...(Input ? [button('find', 's', 'Find', () => openFind($))] : []),
       button('fetch', 'f', fetching ? 'Fetching…' : 'Fetch', () => fetchRemotes($)),
@@ -557,9 +566,9 @@ export const register: Register = (on, options) => {
           await $.store.set(STYLE_STORE_KEY, next)
         },
       ),
-      button('cursor-down', 'j', '↓', () => (menu ? moveMenuCursor($, 1) : moveCursor($, 1)), true),
-      button('cursor-up', 'k', '↑', () => (menu ? moveMenuCursor($, -1) : moveCursor($, -1)), true),
-      button('details', 'o', menu ? 'Run' : 'Details', () => (menu ? runMenuCursor($, protectedBranches) : toggleAtCursor($)), true),
+      button('cursor-down', 'j', '↓', () => (branches ? moveBranchCursor($, 1) : menu ? moveMenuCursor($, 1) : moveCursor($, 1)), true),
+      button('cursor-up', 'k', '↑', () => (branches ? moveBranchCursor($, -1) : menu ? moveMenuCursor($, -1) : moveCursor($, -1)), true),
+      button('details', 'o', branches ? 'Pick' : menu ? 'Run' : 'Details', () => (branches ? pickBranchCursor($) : menu ? runMenuCursor($, protectedBranches) : toggleAtCursor($)), true),
       button('actions', 'a', menu ? 'Close' : 'Actions', () => toggleActions($), menu === null),
       ...(openDetails !== null ? [button('compare', 'x', 'Compare', () => compareAtCursor($), true)] : []),
       ...(hasQuery ? [button('match-next', 'n', 'Next', () => stepFind($, 1), true), button('match-prev', 'p', 'Prev', () => stepFind($, -1), true)] : []),
@@ -571,6 +580,7 @@ export const register: Register = (on, options) => {
         {toolbar.map(line => (
           <Box gap={2}>{line.map(item => item.node)}</Box>
         ))}
+        {branches !== null && branchLines().map(line => <Box>{line}</Box>)}
         {Input && (find.isOpen || query !== '') && (
           <Box key="search" gap={2}>
             {find.isOpen && (

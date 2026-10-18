@@ -31,7 +31,7 @@ What the pane shows:
 - **Description** of a merge commit is dimmed.
 - **Columns**: graph, labels and message, date (`10-18 16:25`, local time), author, short hash, two cells apart. When the pane is narrow the hash, then the author, then the date are hidden (the header follows).
 - **Uncommitted Changes (n)** on top, with an open node above `HEAD`. Press it to unfold the files with their status (`M` `A` `D` `R` `??`). The row is hidden when the working tree is clean.
-- **Show remote branches** toggle (`☑ remote`, on by default). Off, the graph covers local branches, tags and `HEAD` only, and the Branches picker lists local branches only.
+- **Show remote branches** toggle (`☑ remote`, on by default). Off, the graph covers local branches, tags and `HEAD` only, and the Branches list has local branches only.
 - **Load more** at the bottom loads 50 more commits (the first load is 50).
 - **Refresh** re-reads the repository. The pane also refreshes when it opens and after any Bash tool call whose command contains `git`; there is no polling.
 - **Graph style** button (`g`): `image` or `text`, remembered across sessions.
@@ -44,6 +44,7 @@ Keys inside the pane (once focused with ctrl+x tab or a click):
 | `o` | open or close the details of the cursor's commit (on the Uncommitted row: unfold its files, like `c`) |
 | `a` | open or close the **Actions** list of the cursor's row (see Actions); while it is open `j` / `k` / `o` / `1`-`9` act on its items |
 | `x` | with a commit's details open: compare it with the commit under the cursor (see Compare); on the open commit itself, back to its details |
+| `l` | open or close the Branches list; while it is open `j` / `k` / `o` / `1`-`9` act on its entries |
 | `s` | Find (`/` cannot be a hotkey: hotkeys are one digit or lowercase letter) |
 | `n` / `p` | next / previous match while a Find is active (Shift+n is `n` too, so `p` is the way back) |
 | `f` | fetch |
@@ -70,7 +71,7 @@ With a commit's details open, move the cursor to another commit (or the Uncommit
 
 ### Branches, Find, Fetch
 
-- **Branches** picker: `Show All` or one local or remote branch. A branch restricts the graph to the commits `git log <ref>` reaches (tags on those commits still show). The Uncommitted row is hidden when the chosen branch does not contain `HEAD`. A branch that disappears (pruned by a fetch) falls back to `Show All`. Picking a branch folds the open details.
+- **Branches** (`l`, the button reads `Branches: <current>`) unfolds a list under the toolbar: `Show All` or one local or remote branch. It is a list of buttons, not a dropdown, so the arrow keys keep scrolling the pane. `j` / `k` move the highlight (it starts on the current filter and stops at the ends; the commit cursor stays), `o` picks it, `1`-`9` pick the first nine entries, a click picks one, `l` closes the list; a hint line reads `j/k: Select  o: Pick  1-9  l: Close`. Over 10 entries only a window of 10 around the highlight is drawn, with `… n more above/below`. Opening it closes the open details and the action list (and the other way round), since they share the digits. A branch restricts the graph to the commits `git log <ref>` reaches (tags on those commits still show). The Uncommitted row is hidden when the chosen branch does not contain `HEAD`. A branch that disappears (pruned by a fetch) falls back to `Show All`. Picking a branch folds the open details.
 - **Find** (`s`) opens a field; as you type, the text is highlighted in the loaded commits' message, author and hash, and the branches and tags whose name has it are underlined. `3/12 matches` says where the cursor is among them (`12 matches` when it is on another row). Enter hides the field, keeps the highlight and puts the cursor on the first match from where it was; `n` / `p` step, wrapping round. Emptying the field or pressing `✕ Clear` drops it. Only the commits loaded so far are searched.
 - **Fetch** (`f`) runs `git fetch --all --prune` with `Fetching…` on the status line, a toast with the result (the first line of git's error when it fails) and a refresh after. There is no confirmation, and git never prompts for credentials here.
 

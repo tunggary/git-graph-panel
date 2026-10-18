@@ -127,6 +127,12 @@ export type GitGraphActionMenu = {
   form: { key: string; value: string; error?: string } | null
 }
 
+/** The branch list unfolded under the toolbar (`l`). */
+export type GitGraphBranchMenu = {
+  /** The highlighted entry; 0 is `Show All`. */
+  index: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'git-graph-panel': {
@@ -153,6 +159,8 @@ declare module 'claude-code' {
       diff: GitGraphDiffView
       /** The action list under the cursor's row; null when closed. */
       actionMenu: GitGraphActionMenu | null
+      /** The branch list under the toolbar; null when closed. */
+      branchMenu: GitGraphBranchMenu | null
     }
   }
 }

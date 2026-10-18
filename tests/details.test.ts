@@ -373,8 +373,23 @@ describe('diff screen', () => {
 })
 
 describe('branch filter', () => {
-  const options = async (ui: Awaited<ReturnType<typeof mountAt>>) =>
-    ((await ui.find({ key: 'branch' }))?.props.options as { value: string; label: string }[]).map(option => option.label)
+  type Ui = Awaited<ReturnType<typeof mountAt>>
+  /** The entries of the list, opened and closed again. */
+  const options = async (ui: Ui) => {
+    await ui.press({ key: 'branch' })
+    const labels = (await ui.findAll({ type: 'Button', text: /^ *[● ] ./ }))
+      .filter(button => button.key?.startsWith('branch:'))
+      .map(button => (button.text ?? '').replace(/^ *[● ] /, ''))
+    await ui.press({ key: 'branch' })
+    return labels
+  }
+  /** Opens the list and clicks the entry for a ref (`*` for Show All). */
+  const pick = async (ui: Ui, value: string) => {
+    await ui.press({ key: 'branch' })
+    await ui.press({ key: `branch:${value}` })
+  }
+  /** What the toolbar button says the filter is. */
+  const shown = async (ui: Ui) => ((await ui.find({ key: 'branch' }))?.text ?? '').replace('Branches: ', '')
 
   test('lists Show All, then local and remote branches, and filters the log by one ref', async ($, on) => {
     const calls = fakeGit(on)
@@ -383,18 +398,18 @@ describe('branch filter', () => {
     const ui = await mountAt($, 140)
 
     expect(await options(ui)).toEqual(['Show All', 'develop', 'main', 'origin/develop', 'origin/feature/remote-only', 'origin/main'])
-    expect((await ui.find({ key: 'branch' }))?.props.value).toBe('*')
+    expect(await shown(ui)).toBe('Show All')
 
-    await ui.select({ key: 'branch', value: 'refs/remotes/origin/feature/remote-only' })
+    await pick(ui, 'refs/remotes/origin/feature/remote-only')
     const log = logCalls(calls).at(-1) ?? []
     expect(log).toContain('refs/remotes/origin/feature/remote-only')
     expect(log).not.toContain('--branches')
     expect(log).not.toContain('HEAD')
-    expect((await ui.find({ key: 'branch' }))?.props.value).toBe('refs/remotes/origin/feature/remote-only')
+    expect(await shown(ui)).toBe('origin/feature/remote-o…') // cut to 24 cells
 
-    await ui.select({ key: 'branch', value: '*' })
+    await pick(ui, '*')
     expect(logCalls(calls).at(-1)).toContain('--branches')
-    expect((await ui.find({ key: 'branch' }))?.props.value).toBe('*')
+    expect(await shown(ui)).toBe('Show All')
   })
 
   test('the remote toggle only trims the list; hiding remotes drops a remote selection', async ($, on) => {
@@ -403,16 +418,16 @@ describe('branch filter', () => {
     await $.command.run(RUN)
     const ui = await mountAt($, 140)
 
-    await ui.select({ key: 'branch', value: 'refs/heads/main' })
+    await pick(ui, 'refs/heads/main')
     await ui.press({ key: 'remotes' })
     expect(await options(ui)).toEqual(['Show All', 'develop', 'main'])
-    expect((await ui.find({ key: 'branch' }))?.props.value).toBe('refs/heads/main') // a local branch stays selected
+    expect(await shown(ui)).toBe('main') // a local branch stays selected
     expect(logCalls(calls).at(-1)).toContain('refs/heads/main')
 
     await ui.press({ key: 'remotes' })
-    await ui.select({ key: 'branch', value: 'refs/remotes/origin/main' })
+    await pick(ui, 'refs/remotes/origin/main')
     await ui.press({ key: 'remotes' })
-    expect((await ui.find({ key: 'branch' }))?.props.value).toBe('*')
+    expect(await shown(ui)).toBe('Show All')
     expect(logCalls(calls).at(-1)).toContain('--branches')
   })
 
@@ -422,12 +437,12 @@ describe('branch filter', () => {
     fakePanes(on)
     await $.command.run(RUN)
     const ui = await mountAt($, 140)
-    await ui.select({ key: 'branch', value: 'refs/heads/old' })
-    expect((await ui.find({ key: 'branch' }))?.props.value).toBe('refs/heads/old')
+    await pick(ui, 'refs/heads/old')
+    expect(await shown(ui)).toBe('old')
 
     refs = 'refs/heads/develop\n'
     await ui.press({ key: 'refresh' })
-    expect((await ui.find({ key: 'branch' }))?.props.value).toBe('*')
+    expect(await shown(ui)).toBe('Show All')
     expect(logCalls(calls).at(-1)).toContain('--branches')
   })
 
@@ -438,15 +453,121 @@ describe('branch filter', () => {
     await $.command.run(RUN)
     const ui = await mountAt($, 140)
     expect(await ui.find({ key: 'changes' })).toBeDefined()
-    await ui.select({ key: 'branch', value: 'refs/heads/main' })
+    await pick(ui, 'refs/heads/main')
     expect(await ui.find({ key: 'changes' })).toBeUndefined()
   })
 
   test('picking a branch folds the open details', async ($, on) => {
     const { ui } = await setup($, on)
     await ui.press({ key: `select:${second.hash}` })
-    await ui.select({ key: 'branch', value: 'refs/heads/main' })
+    await pick(ui, 'refs/heads/main')
     expect(await ui.find({ key: `details:${second.hash}` })).toBeUndefined()
+  })
+})
+
+describe('branch list', () => {
+  type Ui = Awaited<ReturnType<typeof mountAt>>
+  const picked = async (ui: Ui) =>
+    (await ui.findAll({ type: 'Button' }))
+      .filter(button => button.key?.startsWith('branch:') && JSON.stringify(button).includes('"inverse":true'))
+      .map(button => button.key)
+  const shown = async (ui: Ui) => ((await ui.find({ key: 'branch' }))?.text ?? '').replace('Branches: ', '')
+
+  test('l opens it with the highlight on the current filter; l again closes it', async ($, on) => {
+    fakeGit(on)
+    fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await mountAt($, 140)
+    expect(await ui.find({ key: 'branch:*' })).toBeUndefined()
+    await ui.press({ key: 'branch' })
+    expect(await picked(ui)).toEqual(['branch:*'])
+    expect(await ui.find({ key: 'branch:refs/heads/main' })).toBeDefined()
+    await ui.press({ key: 'branch' })
+    expect(await ui.find({ key: 'branch:*' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('j / k move the highlight (not the commit cursor) and stop at the ends; o picks it', async ($, on) => {
+    const calls = fakeGit(on)
+    fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await mountAt($, 140)
+    await ui.press({ key: 'branch' })
+    await ui.press({ key: 'cursor-up' })
+    expect(await picked(ui)).toEqual(['branch:*'])
+    await ui.press({ key: 'cursor-down' })
+    await ui.press({ key: 'cursor-down' })
+    expect(await picked(ui)).toEqual(['branch:refs/heads/main'])
+    for (let i = 0; i < 10; i++) await ui.press({ key: 'cursor-down' })
+    expect(await picked(ui)).toEqual(['branch:refs/remotes/origin/main'])
+    await ui.press({ key: 'cursor-up' })
+    await ui.press({ key: 'details' }) // o
+    expect(logCalls(calls).at(-1)).toContain('refs/remotes/origin/feature/remote-only')
+    expect(await ui.find({ key: 'branch:*' })).toBeUndefined() // closed
+    expect(await ui.find({ key: `commit:${commits[0]?.hash}` })).toBeDefined()
+    expect((await ui.findAll({ type: 'Text', text: 'Uncommitted Changes (3)' })).at(-1)?.props.inverse).toBeFalsy() // no commit cursor
+    await ui.unmount()
+  })
+
+  test('the first nine entries answer to a digit', async ($, on) => {
+    const calls = fakeGit(on)
+    fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await mountAt($, 140)
+    await ui.press({ key: 'branch' })
+    expect((await ui.find({ key: 'branch:refs/heads/develop' }))?.props.hotkey).toBe('2')
+    await ui.press({ key: 'branch:refs/heads/develop' }) // what the digit 2 presses
+    expect(logCalls(calls).at(-1)).toContain('refs/heads/develop')
+    expect(await shown(ui)).toBe('develop')
+    await ui.press({ key: 'branch' })
+    expect(await picked(ui)).toEqual(['branch:refs/heads/develop']) // opens on the current filter
+    await ui.unmount()
+  })
+
+  test('with remotes hidden the list has no remote branches', async ($, on) => {
+    fakeGit(on)
+    fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await mountAt($, 140)
+    await ui.press({ key: 'remotes' })
+    await ui.press({ key: 'branch' })
+    expect(await ui.find({ key: 'branch:refs/remotes/origin/main' })).toBeUndefined()
+    expect(await ui.find({ key: 'branch:refs/heads/main' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('opening it closes the details; opening the actions closes it', async ($, on) => {
+    fakeGit(on, { answer: argv => (argv.includes('show') ? { exitCode: 128, stderr: 'x' } : undefined) })
+    fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await mountAt($, 140)
+    await ui.press({ key: `select:${commits[1]?.hash}` })
+    expect(await ui.find({ key: `details:${commits[1]?.hash}` })).toBeDefined()
+    await ui.press({ key: 'branch' })
+    expect(await ui.find({ key: `details:${commits[1]?.hash}` })).toBeUndefined()
+    await ui.press({ key: 'actions' })
+    expect(await ui.find({ key: 'branch:*' })).toBeUndefined()
+    expect(await ui.find({ key: 'action:commit#revert' })).toBeDefined()
+    await ui.press({ key: 'branch' })
+    expect(await ui.find({ key: 'action:commit#revert' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('a long list shows a window around the highlight', async ($, on) => {
+    const names = Array.from({ length: 40 }, (_, i) => `refs/heads/b${String(i).padStart(2, '0')}`)
+    fakeGit(on, { refs: `${names.join('\n')}\n` })
+    fakePanes(on)
+    await $.command.run(RUN)
+    const ui = await mountAt($, 140)
+    await ui.press({ key: 'branch' })
+    const rows = async () => (await ui.findAll({ type: 'Button' })).filter(button => button.key?.startsWith('branch:')).length
+    expect(await rows()).toBe(10)
+    expect(await ui.find({ type: 'Text', text: /more below/ })).toBeDefined()
+    for (let i = 0; i < 20; i++) await ui.press({ key: 'cursor-down' })
+    expect(await rows()).toBe(10)
+    expect(await ui.find({ type: 'Text', text: /more above/ })).toBeDefined()
+    expect(await picked(ui)).toEqual(['branch:refs/heads/b19'])
+    await ui.unmount()
   })
 })
 
