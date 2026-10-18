@@ -47,6 +47,8 @@ declare module 'claude-code' {
       limit: number
       /** The uncommitted-files list is unfolded. */
       isChangesOpen: boolean
+      /** The user's choice of graph style; null until they press `g`, then the terminal decides. */
+      graphStyle: 'image' | 'text' | null
     }
   }
 }

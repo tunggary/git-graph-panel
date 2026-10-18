@@ -12,6 +12,7 @@
 /** Git Graph's default lane colors; a lane's color is its index into this list, cycling. */
 export const PALETTE = ['#0085d9', '#d9008f', '#00d90a', '#d98500', '#a300d9', '#ff0000', '#00d9cc', '#e138e8']
 
+/** Default lane cap when the caller gives none; the pane passes `maxLanesFor(width)` instead. */
 export const MAX_LANES = 8
 
 export type Cell = {
@@ -27,6 +28,9 @@ export type GraphInput = {
   isUncommitted?: boolean
 }
 
+/** A line of the picture graph. x is a lane index, y a fraction of the row (0 top, 0.5 node, 1 bottom). */
+export type Stroke = { x0: number; y0: number; x1: number; y1: number; color: number; isDotted: boolean }
+
 export type GraphRow = {
   hash: string
   /** Lane of the commit's node. May be >= MAX_LANES, in which case the node is drawn in the last cell. */
@@ -35,6 +39,13 @@ export type GraphRow = {
   cells: Cell[]
   /** The vertical lines only, for rows drawn under this one (files of the uncommitted row). */
   trail: Cell[]
+  /** The same lines as `cells`, as geometry for the picture graph; lanes beyond `laneCount` are left out. */
+  strokes: Stroke[]
+  /** The verticals of `trail`, as geometry. */
+  trailStrokes: Stroke[]
+  isUncommitted: boolean
+  /** Lanes beyond MAX_LANES are in play on this row (the `…` marker). */
+  hasOverflow: boolean
 }
 
 export type GraphLayout = {
@@ -78,11 +89,16 @@ type RawRow = {
   isUncommitted: boolean
   cells: Map<number, RawCell>
   trail: Map<number, RawCell>
+  strokes: Stroke[]
+  trailStrokes: Stroke[]
   /** Highest lane index anything in this row touches. */
   maxLane: number
 }
 
 const colorOf = (lane: number): number => lane % PALETTE.length
+
+/** Hex color of a lane's line, and of the pills of the commits on it. */
+export const laneColor = (lane: number): string => PALETTE[colorOf(lane)] ?? PALETTE[0]!
 
 function firstFree(slots: readonly unknown[], isTaken: (index: number) => boolean): number {
   let i = 0
@@ -99,6 +115,8 @@ export function layoutGraph(commits: readonly GraphInput[], maxLanes: number = M
     const after: (Lane | null)[] = before.slice()
     const cells = new Map<number, RawCell>()
     const trail = new Map<number, RawCell>()
+    const strokes: Stroke[] = []
+    const trailStrokes: Stroke[] = []
     let maxLane = 0
 
     const mark = (map: Map<number, RawCell>, pos: number, dirs: number, color: number, isDotted = false): void => {
@@ -129,11 +147,14 @@ export function layoutGraph(commits: readonly GraphInput[], maxLanes: number = M
 
     // Lanes passing through this row untouched.
     before.forEach((l, i) => {
-      if (l && !incoming.includes(i)) set(i * 2, U | D, colorOf(i), l.isDotted)
+      if (!l || incoming.includes(i)) return
+      set(i * 2, U | D, colorOf(i), l.isDotted)
+      strokes.push({ x0: i, y0: 0, x1: i, y1: 1, color: colorOf(i), isDotted: l.isDotted })
     })
     // Lanes arriving at this commit; all but the leftmost end here.
     for (const i of incoming) {
       set(i * 2, U, colorOf(i), before[i]?.isDotted)
+      strokes.push({ x0: i, y0: 0, x1: lane, y1: 0.5, color: colorOf(i), isDotted: before[i]?.isDotted === true })
       if (i !== lane) {
         connect(lane, i, 0, colorOf(i))
         after[i] = null
@@ -144,6 +165,7 @@ export function layoutGraph(commits: readonly GraphInput[], maxLanes: number = M
     if (first !== undefined) {
       after[lane] = { hash: first, isDotted: commit.isUncommitted === true }
       set(lane * 2, D, colorOf(lane), commit.isUncommitted)
+      strokes.push({ x0: lane, y0: 0.5, x1: lane, y1: 1, color: colorOf(lane), isDotted: commit.isUncommitted === true })
     } else {
       after[lane] = null
     }
@@ -151,19 +173,32 @@ export function layoutGraph(commits: readonly GraphInput[], maxLanes: number = M
       const existing = after.findIndex((l, i) => i !== lane && l?.hash === parent)
       if (existing >= 0) {
         connect(lane, existing, 0, colorOf(existing))
+        strokes.push({ x0: lane, y0: 0.5, x1: existing, y1: 1, color: colorOf(existing), isDotted: false })
       } else {
         const fresh = firstFree(after, i => after[i] != null || before[i] != null || i === lane)
         after[fresh] = { hash: parent, isDotted: false }
         connect(lane, fresh, D, colorOf(fresh))
+        strokes.push({ x0: lane, y0: 0.5, x1: fresh, y1: 1, color: colorOf(fresh), isDotted: false })
       }
     }
 
     while (after.length > 0 && after[after.length - 1] == null) after.pop()
     lanes = after
     after.forEach((l, i) => {
-      if (l) mark(trail, i * 2, U | D, colorOf(i), l.isDotted)
+      if (!l) return
+      mark(trail, i * 2, U | D, colorOf(i), l.isDotted)
+      trailStrokes.push({ x0: i, y0: 0, x1: i, y1: 1, color: colorOf(i), isDotted: l.isDotted })
     })
-    raw.push({ hash: commit.hash, lane, isUncommitted: commit.isUncommitted === true, cells, trail, maxLane })
+    raw.push({
+      hash: commit.hash,
+      lane,
+      isUncommitted: commit.isUncommitted === true,
+      cells,
+      trail,
+      strokes,
+      trailStrokes,
+      maxLane,
+    })
   }
 
   const used = raw.reduce((m, r) => Math.max(m, r.maxLane + 1), 1)
@@ -174,8 +209,10 @@ export function layoutGraph(commits: readonly GraphInput[], maxLanes: number = M
     const out: Cell[] = Array.from({ length: width }, () => ({ ch: ' ', color: null }))
     for (const [pos, cell] of map) {
       if (pos >= width) continue
-      const glyph = GLYPHS[cell.dirs] ?? ' '
-      out[pos] = { ch: cell.isDotted && glyph === '│' ? '┊' : glyph, color: cell.color }
+      // A line crossing a lane (all four directions) shows the lane, not a ┼.
+      const isCrossing = cell.dirs === (U | D | L | R)
+      const glyph = isCrossing ? '│' : (GLYPHS[cell.dirs] ?? ' ')
+      out[pos] = { ch: cell.isDotted && glyph === '│' ? '┊' : glyph, color: isCrossing ? colorOf(pos >> 1) : cell.color }
     }
     return out
   }
@@ -186,7 +223,17 @@ export function layoutGraph(commits: readonly GraphInput[], maxLanes: number = M
     if (r.lane < laneCount) cells[r.lane * 2] = node
     // Overflow marker; a node that sits in a hidden lane is drawn in its place so the row still has one.
     if (r.maxLane >= laneCount) cells[width - 1] = r.lane >= laneCount ? node : { ch: '…', color: null }
-    return { hash: r.hash, lane: r.lane, cells, trail: toCells(r.trail) }
+    const isVisible = (s: Stroke): boolean => s.x0 < laneCount && s.x1 < laneCount
+    return {
+      hash: r.hash,
+      lane: r.lane,
+      cells,
+      trail: toCells(r.trail),
+      strokes: r.strokes.filter(isVisible),
+      trailStrokes: r.trailStrokes.filter(isVisible),
+      isUncommitted: r.isUncommitted,
+      hasOverflow: r.maxLane >= laneCount,
+    }
   })
 
   return { rows, laneCount, width }

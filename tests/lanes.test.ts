@@ -33,9 +33,9 @@ describe('layoutGraph', () => {
     expect(text([c('M2', 'M1', 'G'), c('G', 'B'), c('M1', 'A', 'F'), c('F', 'A'), c('A', 'B'), c('B')])).toEqual([
       '●─╮',
       '│ ●',
-      '●─┼─╮', // M1's merge parent F crosses G's lane
+      '●─│─╮', // M1's merge parent F crosses G's lane; the lane wins over the line
       '│ │ ●',
-      '●─┼─╯',
+      '●─│─╯',
       '●─╯',
     ])
   })
@@ -43,7 +43,7 @@ describe('layoutGraph', () => {
   test('two branches open at once are joined at their common base', () => {
     expect(text([c('M2', 'M1', 'F2'), c('M1', 'B', 'F1'), c('F2', 'B'), c('F1', 'B'), c('B')])).toEqual([
       '●─╮',
-      '●─┼─╮',
+      '●─│─╮',
       '│ ● │',
       '│ │ ●',
       '●─┴─╯',
