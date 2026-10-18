@@ -6,5 +6,6 @@
     "name": "tunggary"
   },
   "license": "MIT",
-  "repository": "https://github.com/tunggary/git-graph-panel"
+  "repository": "https://github.com/tunggary/git-graph-panel",
+  "types": "./types/index.d.ts"
 }
