@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { formatDate, LOG_FORMAT, parseLog, parseRefs, parseStatus } from '../hooks/lib/parse.ts'
+import { formatDate, LOG_FORMAT, parseLog, parseRefs, parseStatus } from '../hooks/lib/parse'
 
 const record = (...fields: string[]) => fields.join('\u001f')
 

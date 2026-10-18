@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { cellsToText, layoutGraph, MAX_LANES, PALETTE, toRuns } from '../hooks/lib/lanes.ts'
-import type { GraphInput } from '../hooks/lib/lanes.ts'
+import { cellsToText, layoutGraph, MAX_LANES, PALETTE, toRuns } from '../hooks/lib/lanes'
+import type { GraphInput } from '../hooks/lib/lanes'
 
 // Commits are listed newest first, as `git log --date-order` prints them.
 const c = (hash: string, ...parents: string[]): GraphInput => ({ hash, parents })

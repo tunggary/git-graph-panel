@@ -2,11 +2,11 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { GitGraphCommit, GitGraphRef, GitGraphStatusEntry } from '../types'
-import { AUTHOR_WIDTH, DATE_WIDTH, GAP, HASH_WIDTH, pickColumns } from './lib/columns.ts'
-import { isGitRepo, loadSnapshot } from './lib/git.ts'
-import { PALETTE, layoutGraph, toRuns } from './lib/lanes.ts'
-import type { Cell } from './lib/lanes.ts'
-import { formatDate } from './lib/parse.ts'
+import { AUTHOR_WIDTH, DATE_WIDTH, GAP, HASH_WIDTH, pickColumns } from './lib/columns'
+import { isGitRepo, loadSnapshot } from './lib/git'
+import { PALETTE, layoutGraph, toRuns } from './lib/lanes'
+import type { Cell } from './lib/lanes'
+import { formatDate } from './lib/parse'
 
 const PANE = 'git-graph'
 const PAGE_SIZE = 50
@@ -63,9 +63,10 @@ export const register: Register = on => {
   })
 
   // A git command in the session's shell may have moved branches or the working tree.
-  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+  // No `{ tool: 'Bash' }` matcher: with MCP tools connected, typing that overload overflows the compiler (TS2589).
+  on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    if (ran.deny === undefined && /\bgit\b/.test(e.command) && (await isPaneOpen($))) {
+    if (ran.deny === undefined && e.tool === 'Bash' && /\bgit\b/.test(e.command) && (await isPaneOpen($))) {
       try {
         await refresh($)
       } catch {

@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { cellsToText, layoutGraph, MAX_LANES } from '../hooks/lib/lanes.ts'
-import { parseLog, parseStatus } from '../hooks/lib/parse.ts'
-import { FIXTURE_HEAD, FIXTURE_LOG, FIXTURE_STATUS } from './fixtures/fixture-log.ts'
+import { cellsToText, layoutGraph, MAX_LANES } from '../hooks/lib/lanes'
+import { parseLog, parseStatus } from '../hooks/lib/parse'
+import { FIXTURE_HEAD, FIXTURE_LOG, FIXTURE_STATUS } from './fixtures/fixture-log'
 
 // git's output for the repository scripts/make-fixture-repo.sh builds (git log --all --date-order).
 const commits = parseLog(FIXTURE_LOG)

@@ -31,7 +31,7 @@ What the pane shows:
 - **Load more** at the bottom loads 50 more commits (the first load is 50).
 - **Refresh** re-reads the repository. The pane also refreshes when it opens and after any Bash tool call whose command contains `git`; there is no polling.
 
-Keys inside the pane (once focused with ctrl+x tab or a click): `r` refresh, `b` toggle remote branches.
+Keys inside the pane (once focused with ctrl+x tab or a click): `r` refresh, `b` toggle remote branches, `c` unfold uncommitted changes, `m` load more, arrow keys scroll.
 
 This is stage 1 (viewing). Commit details and diffs, branch filtering, search, and write actions (checkout, merge, ...) are not implemented yet.
 
@@ -42,6 +42,7 @@ scripts/make-fixture-repo.sh /tmp/graph-fixture   # a Git Flow-shaped repo with 
 (cd /tmp/graph-fixture && claude --plugin-dir "$OLDPWD")   # hot-reloads on save
 claude plugin validate .
 claude plugin test .
+npx -p typescript@5.6.3 tsc -p .                  # the engine writes tsconfig.json and .claude-plugin/types/ on first load
 ```
 
 `hooks/lib/` holds the pure logic (`parse.ts` for git output, `lanes.ts` for the lane layout, `columns.ts` for narrow-pane column hiding, `git.ts` for the repository reads); `hooks/register.tsx` has the hooks and the pane. `scripts/dump-fixture-log.mjs` regenerates `tests/fixtures/fixture-log.ts` from a fixture repository.

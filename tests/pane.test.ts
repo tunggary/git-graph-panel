@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { parseLog } from '../hooks/lib/parse.ts'
-import { FIXTURE_HEAD, FIXTURE_LOG, FIXTURE_STATUS } from './fixtures/fixture-log.ts'
+import { parseLog } from '../hooks/lib/parse'
+import { FIXTURE_HEAD, FIXTURE_LOG, FIXTURE_STATUS } from './fixtures/fixture-log'
 
 const PLUGIN = 'git-graph-panel'
 const PANE = 'git-graph'
@@ -55,6 +56,11 @@ const paneProps = (bodyColumns: number) => ({
   scroll: { offset: 0, bodyRows: 40 },
   view: {},
 })
+
+// `$.tool.call` is typed over every connected MCP tool as well, and the compiler gives up on that union
+// (TS2589) for a Bash call; this narrows it to the one shape the tests use.
+const callBash = ($: Engine, command: string) =>
+  ($.tool.call as unknown as (input: { tool: 'Bash'; command: string }) => Promise<unknown>)({ tool: 'Bash', command })
 
 const logCalls = (calls: string[][]) => calls.filter(argv => argv.includes('log'))
 
@@ -184,17 +190,17 @@ describe('git graph pane', () => {
     const open = fakePanes(on)
     on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false } }) as never)
 
-    await $.tool.call({ tool: 'Bash', command: 'git status' })
+    await callBash($, 'git status')
     expect(logCalls(calls)).toHaveLength(0) // pane not open
 
     await $.command.run(RUN)
     expect(open.has(PANE)).toBe(true)
     expect(logCalls(calls)).toHaveLength(1)
 
-    await $.tool.call({ tool: 'Bash', command: 'ls -la' })
+    await callBash($, 'ls -la')
     expect(logCalls(calls)).toHaveLength(1)
 
-    await $.tool.call({ tool: 'Bash', command: 'git commit -m "fix: x"' })
+    await callBash($, 'git commit -m "fix: x"')
     expect(logCalls(calls)).toHaveLength(2)
   })
 

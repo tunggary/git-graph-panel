@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { AUTHOR_WIDTH, DATE_WIDTH, GAP, HASH_WIDTH, MIN_MESSAGE_WIDTH, pickColumns } from '../hooks/lib/columns.ts'
+import { AUTHOR_WIDTH, DATE_WIDTH, GAP, HASH_WIDTH, MIN_MESSAGE_WIDTH, pickColumns } from '../hooks/lib/columns'
 
 const GRAPH = 17
 

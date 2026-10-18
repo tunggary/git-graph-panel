@@ -3,8 +3,8 @@
 import type { EngineInterface } from 'claude-code'
 
 import type { GitGraphSnapshot } from '../../types'
-import { LOG_FORMAT, parseLog, parseStatus } from './parse.ts'
-import type { Commit } from './parse.ts'
+import { LOG_FORMAT, parseLog, parseStatus } from './parse'
+import type { Commit } from './parse'
 
 export type GitOptions = {
   limit: number
