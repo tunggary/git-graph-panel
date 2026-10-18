@@ -1,6 +1,6 @@
 {
   "name": "git-graph-panel",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "VS Code Git Graph-style commit graph pane for Claude Code",
   "author": {
     "name": "tunggary"
