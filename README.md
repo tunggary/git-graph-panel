@@ -42,6 +42,7 @@ Keys inside the pane (once focused with ctrl+x tab or a click):
 | --- | --- |
 | `j` / `k` | move the cursor down / up one row (the highlighted row; the pane scrolls to follow it). The first press lands on the top row |
 | `o` | open or close the details of the cursor's commit (on the Uncommitted row: unfold its files, like `c`) |
+| `a` | open or close the **Actions** list of the cursor's row (see Actions); while it is open `j` / `k` / `o` / `1`-`9` act on its items |
 | `x` | with a commit's details open: compare it with the commit under the cursor (see Compare); on the open commit itself, back to its details |
 | `s` | Find (`/` cannot be a hotkey: hotkeys are one digit or lowercase letter) |
 | `n` / `p` | next / previous match while a Find is active (Shift+n is `n` too, so `p` is the way back) |
@@ -73,6 +74,41 @@ With a commit's details open, move the cursor to another commit (or the Uncommit
 - **Find** (`s`) opens a field; as you type, the text is highlighted in the loaded commits' message, author and hash, and the branches and tags whose name has it are underlined. `3/12 matches` says where the cursor is among them (`12 matches` when it is on another row). Enter hides the field, keeps the highlight and puts the cursor on the first match from where it was; `n` / `p` step, wrapping round. Emptying the field or pressing `✕ Clear` drops it. Only the commits loaded so far are searched.
 - **Fetch** (`f`) runs `git fetch --all --prune` with `Fetching…` on the status line, a toast with the result (the first line of git's error when it fails) and a refresh after. There is no confirmation, and git never prompts for credentials here.
 
+### Actions
+
+`a` (the `Actions` button) unfolds a list under the cursor's row, in place of its details; `a` again, or choosing another row, closes it. While it is open `j` / `k` move a highlight through the items (section titles are skipped, it stops at the ends) instead of the commit cursor, `o` (the button reads `Run`) runs the highlighted item, and `1`-`9` run the first nine items (the files' digits are off while the list is open). A click works too. The list is made of buttons, not a `Select`, so the sections stay visible. A hint line above it reads `j/k: Select  o: Run  1-9  a: Close`. The list has a section for the commit and one for each label on the row:
+
+- **Commit**: Add Tag…, Create Branch…, Create Branch and check out…, Checkout (detached HEAD), Cherry Pick, Revert, Merge into current branch, Rebase current branch onto this, Reset current branch to this (soft / mixed / hard), Copy hash, Copy subject. A merge commit is cherry-picked and reverted with `-m 1`.
+- **Branch** (local): Checkout, Rename…, Delete, Merge into current branch, Rebase current branch onto this, Push, Force push (with lease), Pull (the checked-out branch only), Copy name.
+- **Remote branch** `origin/x`: Checkout (creates a local `x` that tracks it, or switches to the one that exists), Fetch into local branch, Merge into current branch, Pull into current branch, Delete remote branch, Copy name.
+- **Tag**: Push tag, Delete tag, Delete tag (also on origin), Copy name.
+- **Uncommitted Changes**: Stash all changes…, Stash all changes, untracked included… (both take an optional message), Discard all changes (`git reset --hard`), Discard all changes and remove untracked files, Clean untracked files, and `Abort merge` / `rebase` / `cherry-pick` / `revert` while one of them waits for you.
+
+Items that do not apply are left out: the checked-out branch has no Checkout, Delete, Merge or Rebase; HEAD's own row has no Cherry Pick, Merge, Rebase, Reset or detached Checkout.
+
+**Names and messages** (tags, branches, Rename, Stash) are typed in a field that replaces the list (Enter continues; Enter on an empty field, `✕ Cancel` or `q` goes back. The field takes the keyboard when it opens, so hotkeys such as `q` reach the pane only after you leave the field; an empty Enter always works). The name is checked with `git check-ref-format` before anything is asked.
+
+**Confirmation**: every action except Copy ends in a question that shows the full command, `Run` or `Cancel`:
+
+```
+Run this?
+git push -u origin feature/x
+```
+
+An action that cannot be undone (reset --hard, discard, clean, deleting an unmerged branch with `-D`, deleting a remote branch or tag, force push) opens with `⚠` and what is lost, and the options are `Cancel`, `Run` in that order. Anything but `Run` (Cancel, dismissing the dialog, a typed answer) runs nothing. Deleting a branch uses `-d` when it is merged into `HEAD`, otherwise `-D` with the warning.
+
+**Running**: commands are argument lists, never a shell string, with `GIT_TERMINAL_PROMPT=0` (git never asks for credentials here) and `GIT_EDITOR=true`. The status line shows `Running git …`; network commands stop after 120 s, the others after 30 s. A toast says what was done, or the first line of git's error. A merge, rebase, cherry-pick, revert or pull that stops on conflicts toasts `conflict: resolve then continue`; fix the files in your shell and run `git <operation> --continue`, or choose `Abort …` on the Uncommitted row. The graph refreshes afterwards and the list closes. `pull` is `git pull --no-rebase --no-edit`; Merge uses `--no-edit`.
+
+**Copy** uses the host's clipboard (`$.ui.copy`: the terminal's clipboard tool or OSC 52). If that does not take, the toast shows the value.
+
+**Protected branches**: a push or force push to a protected branch, and deleting a protected branch on the remote, are never run. The toast says `protected branch: use a pull request (main)` and nothing is asked. A push goes to the branch's upstream (or to a new `origin/<name>`), so a local branch whose upstream is protected is refused too. The list is the plugin option `protectedBranches`, comma-separated names, default `main,develop`; set it in the config menu (the plugin has a row for it) or in settings.json:
+
+```json
+{ "pluginConfigs": { "git-graph-panel": { "options": { "protectedBranches": "main,develop,release/1.0" } } } }
+```
+
+An empty value protects nothing. Local operations (checkout, merge, reset, deleting a local branch) are not restricted: they are asked about and can be undone or are the person's call.
+
 ### Graph style
 
 - `image`: every row is a small PNG drawn over two cells per lane: straight 3px lines, smooth curves where a branch leaves or joins, filled nodes, an open ring for the checked-out commit, and a gray ring over a dotted line for Uncommitted Changes. It needs a terminal that shows pictures: **kitty, Ghostty and WezTerm** (read from `TERM_PROGRAM` / `KITTY_WINDOW_ID`). The pictures assume cells about twice as tall as wide (10x20 px); with other proportions the nodes look oval.
@@ -81,7 +117,7 @@ With a commit's details open, move the cursor to another commit (or the Uncommit
 
 The default is `image` where the terminal is one of the above, `text` everywhere else, and always `text` inside tmux (it does not pass pictures through). Pressing `g` overrides the default and is kept in the plugin's store.
 
-Stages 1 (viewing) and 2 (details, diff, compare, branch filter, find, fetch) are done. Write actions (checkout, merge, ...) are not implemented yet.
+Stages 1 (viewing), 2 (details, diff, compare, branch filter, find, fetch) and 3 (write actions) are done.
 
 ## Development
 
@@ -93,4 +129,4 @@ claude plugin test .
 npx -p typescript@5.6.3 tsc -p .                  # the engine writes tsconfig.json and .claude-plugin/types/ on first load
 ```
 
-`hooks/lib/` holds the pure logic (`parse.ts` for git output, `lanes.ts` for the lane layout, `raster.ts` and `png.ts` for the picture graph, `labels.ts` for the pills, `terminal.ts` for the picture check, `columns.ts` for narrow-pane column hiding, `text.ts` for cell widths, `diff.ts` for cutting long diffs, `search.ts` for Find, `git.ts` for the repository reads); `hooks/actions.ts` is what the buttons and keys do; `hooks/register.tsx` has the hooks and the panes. `claude plugin validate` reads state references only in the file that uses them, so the atoms are declared in both of those files. The fixture also has a multi-line message, a rename, a binary file and a 4000-line diff for the details view. `scripts/dump-fixture-log.mjs` regenerates `tests/fixtures/fixture-log.ts` from a fixture repository.
+`hooks/lib/` holds the pure logic (`commands.ts` for the actions' menu, argv and protected-branch rules, `parse.ts` for git output, `lanes.ts` for the lane layout, `raster.ts` and `png.ts` for the picture graph, `labels.ts` for the pills, `terminal.ts` for the picture check, `columns.ts` for narrow-pane column hiding, `text.ts` for cell widths, `diff.ts` for cutting long diffs, `search.ts` for Find, `git.ts` for the repository reads); `hooks/actions.ts` is what the buttons and keys do; `hooks/register.tsx` has the hooks and the panes. `claude plugin validate` reads state references only in the file that uses them, so the atoms are declared in both of those files. The fixture also has a multi-line message, a rename, a binary file and a 4000-line diff for the details view. `scripts/dump-fixture-log.mjs` regenerates `tests/fixtures/fixture-log.ts` from a fixture repository.

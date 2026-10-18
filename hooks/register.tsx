@@ -3,25 +3,33 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { GitGraphCommit, GitGraphFile, GitGraphStatusEntry } from '../types'
 import {
+  cancelActionForm,
+  chooseAction,
   clearFind,
   closeDiff,
   compareAtCursor,
   fetchRemotes,
   gotoDiff,
   moveCursor,
+  moveMenuCursor,
   openFind,
   pointLabel,
   refresh,
+  runMenuCursor,
   selectRow,
+  setActionInput,
   setBranchFilter,
   setQuery,
   showDiff,
   stepDiff,
   stepFind,
+  submitActionForm,
   submitFind,
+  toggleActions,
   toggleAtCursor,
   toggleRemotes,
 } from './actions'
+import { parseProtected, rowMenu } from './lib/commands'
 import { AUTHOR_WIDTH, DATE_WIDTH, GAP, GRAPH_MIN_WIDTH, HASH_WIDTH, maxLanesFor, pickColumns } from './lib/columns'
 import { UNCOMMITTED, isGitRepo } from './lib/git'
 import { fitLabels, mergeLabels, pillParts } from './lib/labels'
@@ -50,6 +58,7 @@ const branchFilter = atom({ plugin: 'git-graph-panel', key: 'branchFilter' } as 
 const search = atom({ plugin: 'git-graph-panel', key: 'search' } as const, { isOpen: false, query: '' })
 const isFetching = atom({ plugin: 'git-graph-panel', key: 'isFetching' } as const, false)
 const diff = atom({ plugin: 'git-graph-panel', key: 'diff' } as const, { kind: 'idle' })
+const actionMenu = atom({ plugin: 'git-graph-panel', key: 'actionMenu' } as const, null)
 
 // Spelled out here, not imported: `claude plugin validate` reads a `ui.render` matcher's requestId from a const of this file.
 const PANE = 'git-graph'
@@ -79,7 +88,10 @@ const colorOfCell = (cell: number | null): string | undefined => (cell === null 
 
 const STATUS_COLORS: Record<string, string> = { M: 'warning', A: 'success', D: 'error', R: 'suggestion', '??': 'inactive' }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // Read once per load: changing the setting reloads the module.
+  const protectedBranches = parseProtected(options.protectedBranches)
+
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'graph', description: 'Open or close the git graph pane' })
     const saved = await $.store.get(STYLE_STORE_KEY)
@@ -131,6 +143,7 @@ export const register: Register = on => {
     const find = await read($, search)
     const fetching = await read($, isFetching)
     const view = await read($, diff)
+    const menu = await read($, actionMenu)
 
     if (view.kind === 'open') {
       // The diff replaces the whole pane (no pictures here, so the Image budget is untouched).
@@ -337,7 +350,7 @@ export const register: Register = on => {
     /** A file of a commit or comparison: a Button that opens its diff in the Diff pane. */
     const FileButton = ({ files, index, from, to, range }: { files: readonly GitGraphFile[]; index: number; from: string; to: string; range: string }) => {
       const file = files[index]!
-      const hotkey = index < 9 ? String(index + 1) : undefined // the first nine files answer to a digit
+      const hotkey = index < 9 && menu === null ? String(index + 1) : undefined // the first nine files answer to a digit (the open action list has them then)
       const stats = file.added === null ? 'bin' : `+${file.added} -${file.deleted}`
       const path = file.oldPath === undefined ? file.path : `${file.oldPath} → ${file.path}`
       return (
@@ -395,11 +408,11 @@ export const register: Register = on => {
       return lines
     }
 
-    const Details = ({ commit, row }: { commit: GitGraphCommit; row: GraphRow }) => {
-      const lines = detailLines(commit)
+    /** Lines written under a row, to the right of the graph's trail. */
+    const Block = ({ id, lines, row }: { id: string; lines: ReturnType<typeof Graph>[]; row: GraphRow }) => {
       const picture = pictureOf(row, { isTrail: true }, lines.length)
       return (
-        <Box key={`details:${commit.hash}`} flexDirection="column">
+        <Box key={id} flexDirection="column">
           {lines.map(line => (
             <Box gap={GAP}>
               <Graph row={row} picture={picture} isTrail />
@@ -412,16 +425,67 @@ export const register: Register = on => {
       )
     }
 
+    /** The action list of the open menu, or its text field. */
+    const actionLines = () => {
+      const lines: ReturnType<typeof Graph>[] = []
+      if (menu === null) return lines
+      const sections = rowMenu(snap, menu.hash, menu.operation, protectedBranches, Input !== null)
+      if (menu.form && Input) {
+        const item = sections.flatMap(section => section.items).find(one => one.key === menu.form?.key)
+        if (item?.prompt) {
+          lines.push(<Text bold>{item.label}</Text>)
+          lines.push(
+            <Input
+              key="action-input"
+              label={item.prompt.label}
+              placeholder={item.prompt.placeholder}
+              value={menu.form.value}
+              autoFocus
+              submitLabel="next"
+              onInput={value => setActionInput($, value)}
+              onSubmit={value => submitActionForm($, value, protectedBranches)}
+            />,
+          )
+          if (menu.form.error) lines.push(<Text color="error">{menu.form.error}</Text>)
+          lines.push(<Button key="action-cancel" plain hotkey="q" label="✕ Cancel (or Enter on an empty field)" onPress={() => cancelActionForm($)} />)
+          return lines
+        }
+      }
+      lines.push(<Text dimColor>j/k: Select  o: Run  1-9  a: Close</Text>)
+      let at = 0
+      for (const section of sections) {
+        lines.push(<Text bold>{section.title}</Text>)
+        for (const item of section.items) {
+          const isPicked = at === menu.index
+          const hotkey = at < 9 ? String(at + 1) : undefined
+          lines.push(
+            <Button key={`action:${item.key}`} plain hotkey={hotkey} onPress={() => chooseAction($, item.key, protectedBranches)}>
+              <Text color={item.isRisky ? 'warning' : undefined} inverse={isPicked}>{`${hotkey === undefined ? '   ' : ''}${item.isRisky ? '⚠ ' : ''}${item.label}`}</Text>
+            </Button>,
+          )
+          at += 1
+        }
+      }
+      if (lines.length === 0) lines.push(<Text dimColor>No actions for this row.</Text>)
+      return lines
+    }
+
     const commitRows = new Map(commits.map(commit => [commit.hash, commit]))
     const rows = graph.rows.map(row => {
       const commit = commitRows.get(row.hash)
       if (commit) {
         const rowElement = <CommitRow commit={commit} row={row} picture={pictureOf(row, { isHead: commit.hash === snap.head })} />
-        if (openDetails?.hash !== commit.hash) return rowElement
+        const hasActions = menu?.hash === commit.hash
+        if (openDetails?.hash !== commit.hash && !hasActions) return rowElement
+        // One list under a row at a time: the actions take the place of the details until they are closed.
         return (
           <Box key={`block:${commit.hash}`} flexDirection="column">
             {rowElement}
-            <Details commit={commit} row={row} />
+            {hasActions ? (
+              <Block id={`actions:${commit.hash}`} lines={actionLines()} row={row} />
+            ) : (
+              <Block id={`details:${commit.hash}`} lines={detailLines(commit)} row={row} />
+            )}
           </Box>
         )
       }
@@ -440,6 +504,7 @@ export const register: Register = on => {
             </Button>
           </Box>
           {changesOpen && changes.map(entry => <FileRow entry={entry} row={row} picture={trailPicture} />)}
+          {menu?.hash === UNCOMMITTED && <Block id="actions:uncommitted" lines={actionLines()} row={row} />}
         </Box>
       )
     })
@@ -492,9 +557,10 @@ export const register: Register = on => {
           await $.store.set(STYLE_STORE_KEY, next)
         },
       ),
-      button('cursor-down', 'j', '↓', () => moveCursor($, 1), true),
-      button('cursor-up', 'k', '↑', () => moveCursor($, -1), true),
-      button('details', 'o', 'Details', () => toggleAtCursor($), true),
+      button('cursor-down', 'j', '↓', () => (menu ? moveMenuCursor($, 1) : moveCursor($, 1)), true),
+      button('cursor-up', 'k', '↑', () => (menu ? moveMenuCursor($, -1) : moveCursor($, -1)), true),
+      button('details', 'o', menu ? 'Run' : 'Details', () => (menu ? runMenuCursor($, protectedBranches) : toggleAtCursor($)), true),
+      button('actions', 'a', menu ? 'Close' : 'Actions', () => toggleActions($), menu === null),
       ...(openDetails !== null ? [button('compare', 'x', 'Compare', () => compareAtCursor($), true)] : []),
       ...(hasQuery ? [button('match-next', 'n', 'Next', () => stepFind($, 1), true), button('match-prev', 'p', 'Prev', () => stepFind($, -1), true)] : []),
     ]
