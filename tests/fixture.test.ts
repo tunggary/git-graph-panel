@@ -137,3 +137,11 @@ describe('fixture repository', () => {
     ])
   })
 })
+
+describe('fixture graph with room for every lane', () => {
+  test('a wide pane draws all lanes, no `…`', () => {
+    const wide = layoutGraph([{ hash: 'uncommitted', parents: [FIXTURE_HEAD], isUncommitted: true }, ...commits], 100)
+    expect(wide.laneCount).toBe(13)
+    expect(wide.rows.some(row => row.hasOverflow)).toBe(false)
+  })
+})

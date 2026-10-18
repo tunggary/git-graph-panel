@@ -183,8 +183,9 @@ describe('git graph pane', () => {
     }
 
     expect(await columns(140)).toEqual({ hash: true, author: true, date: true })
-    expect(await columns(70)).toEqual({ hash: false, author: true, date: true })
-    expect(await columns(60)).toEqual({ hash: false, author: false, date: true })
+    // the fixture has 13 lanes; from 65 columns all of them fit in 40% of the pane (26 cells)
+    expect(await columns(80)).toEqual({ hash: false, author: true, date: true })
+    expect(await columns(70)).toEqual({ hash: false, author: false, date: true })
     expect(await columns(45)).toEqual({ hash: false, author: false, date: false })
   })
 
@@ -257,8 +258,8 @@ describe('git graph pane', () => {
     }
 
     expect(await headers(140)).toEqual([true, true, true, true, true])
-    expect(await headers(70)).toEqual([true, true, true, true, false])
-    expect(await headers(60)).toEqual([true, true, true, false, false])
+    expect(await headers(80)).toEqual([true, true, true, true, false])
+    expect(await headers(70)).toEqual([true, true, true, false, false])
     expect(await headers(45)).toEqual([true, true, false, false, false])
   })
 

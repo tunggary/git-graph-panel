@@ -12,6 +12,7 @@
 /** Git Graph's default lane colors; a lane's color is its index into this list, cycling. */
 export const PALETTE = ['#0085d9', '#d9008f', '#00d90a', '#d98500', '#a300d9', '#ff0000', '#00d9cc', '#e138e8']
 
+/** Default lane cap when the caller gives none; the pane passes `maxLanesFor(width)` instead. */
 export const MAX_LANES = 8
 
 export type Cell = {

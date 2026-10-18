@@ -25,7 +25,7 @@ claude plugin install git-graph-panel --marketplace tunggary/git-graph-panel
 What the pane shows:
 
 - **Header** `Graph  Description  Date  Author  Commit`, then one row per commit of `git log --branches --remotes --tags HEAD --date-order`.
-- **Graph** in Git Graph's lane colors, at most 8 lanes (further lanes are folded into a `…` at the right edge). Two styles, see below.
+- **Graph** in Git Graph's lane colors, as many lanes as fit in 40% of the pane's width (two cells per lane, at least 8); further lanes are folded into a `…` at the right edge. Two styles, see below.
 - **Labels** are pills. Branches are painted in the lane color of their commit with black or white text, whichever reads better; a remote-only branch (`origin/xxx`) takes a darker tone of it, tags are amber, a detached `HEAD` purple; the checked-out branch is bold. A local branch that a remote also has is one pill, `develop │ origin`, the remote half in the darker tone.
 - **Stashes** and other tools' private refs (such as cmux's `refs/cmux/*`) are left out of the graph, as in Git Graph.
 - **Description** of a merge commit is dimmed.

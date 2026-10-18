@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { AUTHOR_WIDTH, DATE_WIDTH, GAP, HASH_WIDTH, MIN_MESSAGE_WIDTH, pickColumns } from '../hooks/lib/columns'
+import { AUTHOR_WIDTH, DATE_WIDTH, GAP, HASH_WIDTH, maxLanesFor, MIN_LANES, MIN_MESSAGE_WIDTH, pickColumns } from '../hooks/lib/columns'
 
 const GRAPH = 17
 
@@ -31,5 +31,17 @@ describe('pickColumns', () => {
     const narrow = pickColumns(60, GRAPH)
     expect(wide.messageWidth).toBeGreaterThanOrEqual(MIN_MESSAGE_WIDTH)
     expect(narrow.messageWidth).toBe(60 - GRAPH - GAP - GAP - DATE_WIDTH)
+  })
+})
+
+describe('maxLanesFor', () => {
+  test('the graph takes up to 40% of the pane, two cells per lane', () => {
+    expect(maxLanesFor(100)).toBe(20) // 40 cells
+    expect(maxLanesFor(225)).toBe(45) // 90 cells
+  })
+
+  test('a narrow pane still draws MIN_LANES', () => {
+    expect(maxLanesFor(40)).toBe(MIN_LANES)
+    expect(maxLanesFor(0)).toBe(MIN_LANES)
   })
 })

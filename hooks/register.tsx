@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { GitGraphCommit, GitGraphRef, GitGraphStatusEntry } from '../types'
-import { AUTHOR_WIDTH, DATE_WIDTH, GAP, GRAPH_MIN_WIDTH, HASH_WIDTH, pickColumns } from './lib/columns'
+import { AUTHOR_WIDTH, DATE_WIDTH, GAP, GRAPH_MIN_WIDTH, HASH_WIDTH, maxLanesFor, pickColumns } from './lib/columns'
 import { isGitRepo, loadSnapshot } from './lib/git'
 import { mergeLabels, pillParts } from './lib/labels'
 import type { Label } from './lib/labels'
@@ -111,7 +111,7 @@ export const register: Register = on => {
         : []),
       ...commits,
     ]
-    const graph = layoutGraph(inputs)
+    const graph = layoutGraph(inputs, maxLanesFor(e.props.bodyColumns))
     const graphWidth = Math.max(graph.width, GRAPH_MIN_WIDTH)
     const layout = pickColumns(e.props.bodyColumns, graphWidth)
 
