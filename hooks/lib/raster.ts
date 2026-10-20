@@ -157,7 +157,7 @@ export function rasterizeRow(row: GraphRow, laneCount: number, { isHead = false,
   for (const s of isTrail ? row.trailStrokes : row.strokes) paintStroke(px, w, h, s)
   if (isTrail) return px
 
-  const color = row.isUncommitted ? GRAY : (COLORS[row.lane % COLORS.length] ?? GRAY)
+  const color = row.isUncommitted ? GRAY : (COLORS[row.color % COLORS.length] ?? GRAY)
   const hidden = row.lane >= laneCount
   const [cx, cy] = [hidden ? w - NODE_RADIUS - 1 : laneX(row.lane), CELL_H / 2]
   if (row.isUncommitted || isHead) paintRing(px, w, h, cx, cy, color)
@@ -191,7 +191,7 @@ export function rowImage(row: GraphRow, laneCount: number, options: RasterOption
   const key = JSON.stringify([
     laneCount,
     isTrail,
-    isTrail ? null : [options.isHead === true, row.lane, row.isUncommitted, row.hasOverflow, row.strokes],
+    isTrail ? null : [options.isHead === true, row.lane, row.color, row.isUncommitted, row.hasOverflow, row.strokes],
     isTrail ? row.trailStrokes : null,
   ])
   const hit = memo.get(key)
