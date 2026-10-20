@@ -333,7 +333,7 @@ export const register: Register = (on, options) => {
           <Graph row={row} picture={picture} />
           <Box width={layout.messageWidth} flexShrink={0}>
             <Button key={`select:${commit.hash}`} plain onPress={() => selectRow($, commit.hash)}>
-              <Labels labels={shown} color={laneColor(row.lane)} />
+              <Labels labels={shown} color={laneColor(row.color)} />
               <Marked text={truncate(commit.subject, subjectWidth)} dim={commit.parents.length > 1} isCursor={isCursor} padTo={subjectWidth} />
             </Button>
           </Box>

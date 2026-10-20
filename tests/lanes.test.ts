@@ -87,6 +87,32 @@ describe('layoutGraph', () => {
     ])
   })
 
+  test('branches that reuse one lane take different colors; a lane keeps its color down its line', () => {
+    // Three short branches, one after another, each merged into the main line.
+    const graph = layoutGraph([
+      c('M3', 'M2', 'F3'),
+      c('F3', 'M2'),
+      c('M2', 'M1', 'F2'),
+      c('F2', 'M1'),
+      c('M1', 'M0', 'F1'),
+      c('F1', 'M0'),
+      c('M0'),
+    ])
+    const at = (hash: string) => graph.rows.find(row => row.hash === hash)!
+    expect([at('F3').lane, at('F1').lane]).toEqual([1, 1])
+    expect(new Set(['F3', 'F2', 'F1'].map(h => at(h).color)).size).toBe(3)
+    expect(['M3', 'M2', 'M1', 'M0'].map(h => at(h).color)).toEqual([0, 0, 0, 0])
+    expect(at('F1').cells[2]).toEqual({ ch: '●', color: at('F1').color })
+    expect(at('M1').cells[2]?.color).toBe(at('F1').color) // the merge line takes the branch's color
+  })
+
+  test('a new lane skips the colors of the lanes still open', () => {
+    const parents = Array.from({ length: 10 }, (_, i) => `p${i}`)
+    const graph = layoutGraph([c('M', ...parents), ...parents.map(p => c(p, 'base')), c('base')], 12)
+    const open = graph.rows.slice(1, 9).map(row => row.color)
+    expect(new Set([0, ...open]).size).toBe(8) // all eight colors while they last
+  })
+
   test('the palette cycles when more lanes are allowed than it has colors', () => {
     const parents = Array.from({ length: 10 }, (_, i) => `p${i}`)
     const graph = layoutGraph([c('M', ...parents), ...parents.map(p => c(p, 'base')), c('base')], 12)
