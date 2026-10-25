@@ -167,6 +167,42 @@ describe('git graph pane', () => {
     expect(logCalls(calls)).toHaveLength(1)
   })
 
+  for (const source of ['clear', 'resume', 'compact', 'fork'] as const) {
+    test(`${source} reloads the open pane`, async ($, on) => {
+      const calls = fakeGit(on)
+      fakePanes(on)
+      on('classic.SessionStart', () => ({}) as never)
+      await $.command.run(RUN)
+      expect(logCalls(calls)).toHaveLength(1)
+
+      await $.classic.SessionStart({ source })
+      expect(logCalls(calls)).toHaveLength(2)
+      const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(140), viewport: { columns: 140, rows: 40 } })
+      expect(await ui.find({ key: `commit:${commits[0]?.hash}` })).toBeDefined()
+      await ui.unmount()
+    })
+  }
+
+  test('startup leaves the reload to session.start', async ($, on) => {
+    const calls = fakeGit(on)
+    fakePanes(on)
+    on('classic.SessionStart', () => ({}) as never)
+    await $.command.run(RUN)
+
+    await $.classic.SessionStart({ source: 'startup' })
+    expect(logCalls(calls)).toHaveLength(1)
+  })
+
+  test('/clear leaves a closed pane closed', async ($, on) => {
+    const calls = fakeGit(on)
+    const open = fakePanes(on)
+    on('classic.SessionStart', () => ({}) as never)
+
+    await $.classic.SessionStart({ source: 'clear' })
+    expect(open.has(PANE)).toBe(false)
+    expect(logCalls(calls)).toHaveLength(0)
+  })
+
   test('session.start does not open the pane outside a repository', async ($, on) => {
     fakeGit(on, { isRepo: false })
     const open = fakePanes(on)

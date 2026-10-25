@@ -80,6 +80,11 @@ async function openPane($: Dollar): Promise<void> {
   await refresh($)
 }
 
+async function restoreStyle($: Dollar): Promise<void> {
+  const saved = await $.store.get(STYLE_STORE_KEY)
+  if (saved === 'image' || saved === 'text') await update($, graphStyle, () => saved)
+}
+
 const isPaneOpen = async ($: Dollar): Promise<boolean> => (await $.ui.panes()).some(pane => pane.id === PANE)
 
 /** Image-capable terminals only: tmux and everything unknown get the text graph. */
@@ -101,11 +106,27 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'graph', description: 'Open or close the git graph pane' })
-    const saved = await $.store.get(STYLE_STORE_KEY)
-    if (saved === 'image' || saved === 'text') await update($, graphStyle, () => saved)
+    await restoreStyle($)
     if (await isGitRepo($)) void openPane($).catch(() => {})
 
     return next(e)
+  })
+
+  // /clear (and an in-session /resume or fork) moves on under a new session id: the session's state starts over
+  // (the pane back at "Loading…"), but no `session.start` fires. The pane stays placed, so fill it again.
+  // Every source but startup, which `session.start` covers: a reload is cheap where the state was kept (compact).
+  on('classic.SessionStart', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.source !== 'startup') {
+      try {
+        await restoreStyle($)
+        if (await isPaneOpen($)) await refresh($)
+      } catch {
+        // A failed redraw must not fail the clear.
+      }
+    }
+
+    return ran
   })
 
   on('command.run', { command: 'graph' }, async $ => {
