@@ -60,7 +60,7 @@ export async function loadSnapshot($: Runner, { limit, isRemotesShown, branchFil
     }
     if (!isRemotesShown) commits = commits.map(c => ({ ...c, refs: c.refs.filter(r => r.kind !== 'remote') }))
 
-    const status = await git(['status', '--porcelain=v1', '-z'])
+    const status = await git(['status', '--porcelain=v1', '-z', '--untracked-files=all'])
     let changes = status.exitCode === 0 ? parseStatus(status.stdout) : []
     // The uncommitted row hangs off HEAD; a branch that does not contain it leaves the row nowhere to attach.
     const shown = commits.slice(0, limit)
@@ -88,7 +88,27 @@ export async function loadChangedFiles($: Runner, from: string, to: string): Pro
     gitOrThrow($, [...base, '--numstat', ...range(from, to), '--']),
     gitOrThrow($, [...base, '--name-status', ...range(from, to), '--']),
   ])
-  return mergeFiles(parseNameStatus(nameStatus.stdout), parseNumstat(numstat.stdout))
+  const tracked = mergeFiles(parseNameStatus(nameStatus.stdout), parseNumstat(numstat.stdout))
+  return to === UNCOMMITTED ? [...tracked, ...(await loadUntrackedFiles($))] : tracked
+}
+
+/** `git diff --no-index` exits 1 when the files differ, which is the success case here. */
+async function diffNoIndex($: Runner, args: string[], path: string) {
+  const run = await $.process.run(['git', 'diff', '--no-index', '--no-color', '--no-ext-diff', ...args, '--', '/dev/null', path], { env: { GIT_OPTIONAL_LOCKS: '0' } })
+  if (run.exitCode > 1) throw new Error(run.stderr.trim().split('\n')[0] || `git diff exited with ${run.exitCode}`)
+  return run
+}
+
+/** The untracked files (directories expanded), as added files; the working tree's `git diff HEAD` leaves them out. */
+async function loadUntrackedFiles($: Runner): Promise<GitGraphFile[]> {
+  const listed = await gitOrThrow($, ['ls-files', '--others', '--exclude-standard', '-z'])
+  const paths = listed.stdout.split('\u0000').filter(path => path !== '')
+  return Promise.all(
+    paths.map(async path => {
+      const [count] = parseNumstat((await diffNoIndex($, ['--numstat', '-z'], path)).stdout)
+      return { status: 'A', path, added: count?.added ?? null, deleted: count?.deleted ?? null, isUntracked: true as const }
+    }),
+  )
 }
 
 /** A commit's message and author, and its files against its first parent (as Git Graph shows a merge). */
@@ -102,6 +122,7 @@ export async function loadCommitDetails($: Runner, hash: string): Promise<{ info
 
 /** The unified diff of one file between two points. */
 export async function loadFileDiff($: Runner, from: string, to: string, file: GitGraphFile): Promise<string> {
+  if (file.isUntracked) return (await diffNoIndex($, ['-U3'], file.path)).stdout
   const paths = file.oldPath === undefined ? [file.path] : [file.oldPath, file.path]
   const run = await gitOrThrow($, ['diff', '-M', '--no-color', '--no-ext-diff', '-U3', ...range(from, to), '--', ...paths])
   return run.stdout

@@ -49,6 +49,7 @@ function answers(options: { committer?: string; fail?: boolean } = {}) {
       const commit = commits.find(one => one.hash === hash)
       return { stdout: showOf(hash, commit?.parents ?? [], options.committer === undefined ? {} : { committer: options.committer }) }
     }
+    if (argv[0] === 'ls-files') return { stdout: '' } // no untracked files
     if (argv[0] !== 'diff') return undefined
     if (argv.includes('--numstat')) return { stdout: NUMSTAT }
     if (argv.includes('--name-status')) return { stdout: feed.nameStatus }
