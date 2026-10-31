@@ -59,7 +59,7 @@ The top of the pane is a row of buttons, each written as key and label: `l: Bran
 - **Labels** are colored pills in the lane color of their commit. A remote-only branch (`origin/x`) is a darker tone, tags are amber, a detached `HEAD` is purple, and the checked-out branch is bold. A local branch that a remote also has is one pill: `develop │ origin`.
 - **Merge commits** have a dimmed description.
 - **Columns** are graph, labels and message, date (`10-18 16:25`, local time), author and short hash. In a narrow pane the hash is hidden first, then the author, then the date.
-- **Uncommitted Changes (n)** is a row on top of `HEAD`, hidden when the working tree is clean. Press it (or `c`) to unfold the files with their status (`M` `A` `D` `R` `??`).
+- **Uncommitted Changes (n)** is a row on top of `HEAD`, hidden when the working tree is clean. Press it (or `c`) to unfold the files with their status (`M` `A` `D` `R` `??`). Press a file (or `1`-`9` for the first nine, while no details or menu is open) to see its diff, `HEAD` ↔ working tree; `n` / `p` then walk the uncommitted files. Untracked files are diffed against an empty file.
 - **Remote toggle** `☑ remote` (`b`) is on by default. Off, the graph and the Branches list show local branches only. If a remote branch was picked in Branches, the filter goes back to `Show All`.
 - **Stashes** and other tools' private refs (such as `refs/cmux/*`) are not shown, as in Git Graph.
 - **Refresh**: the pane reloads when it opens, when you press `r`, and after every Bash tool call whose command contains `git`. There is no polling, so a change made in another terminal appears after the next refresh.
@@ -82,7 +82,7 @@ A diff longer than 2500 lines or 90000 characters is cut on a line and says how 
 
 ### Compare
 
-With a commit's details open, move the cursor to another commit (or to Uncommitted Changes) and press `x`. The details turn into `Comparing <older> ↔ <newer>` with the files that differ (`git diff -M older newer`). Against Uncommitted Changes, the working tree is the newer end and only tracked files are compared. Press a file to see its diff between the same two points. `x` on another row changes the target; `x` on the open commit goes back to its details.
+With a commit's details open, move the cursor to another commit (or to Uncommitted Changes) and press `x`. The details turn into `Comparing <older> ↔ <newer>` with the files that differ (`git diff -M older newer`). Against Uncommitted Changes, the working tree is the newer end and untracked files are listed as added. Press a file to see its diff between the same two points. `x` on another row changes the target; `x` on the open commit goes back to its details.
 
 ### Branches, Find, Fetch
 

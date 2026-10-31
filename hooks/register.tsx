@@ -25,6 +25,7 @@ import {
   selectRow,
   setActionInput,
   setQuery,
+  showChangesDiff,
   showDiff,
   stepDiff,
   stepFind,
@@ -379,13 +380,15 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const FileRow = ({ entry, row, picture }: { entry: GitGraphStatusEntry; row: GraphRow; picture: RowImage | null }) => (
+    const FileRow = ({ entry, row, picture, hotkey }: { entry: GitGraphStatusEntry; row: GraphRow; picture: RowImage | null; hotkey?: string }) => (
       <Box key={`file:${entry.path}`} gap={GAP}>
         <Graph row={row} picture={picture} isTrail />
         <Box width={layout.messageWidth} flexShrink={0}>
-          <Text wrap="truncate-start">
-            <Text color={STATUS_COLORS[entry.code] ?? 'text'}>{entry.code.padEnd(2)}</Text> {entry.path}
-          </Text>
+          <Button key={`change:${entry.path}`} plain hotkey={hotkey} onPress={() => showChangesDiff($, entry.path)}>
+            <Text wrap="truncate-start">
+              <Text color={STATUS_COLORS[entry.code] ?? 'text'}>{entry.code.padEnd(2)}</Text> {entry.path}
+            </Text>
+          </Button>
         </Box>
       </Box>
     )
@@ -565,7 +568,7 @@ export const register: Register = (on, options) => {
               <Text italic inverse={isCursor}>Uncommitted Changes ({changes.length})</Text>
             </Button>
           </Box>
-          {changesOpen && changes.map(entry => <FileRow entry={entry} row={row} picture={trailPicture} />)}
+          {changesOpen && changes.map((entry, at) => <FileRow entry={entry} row={row} picture={trailPicture} hotkey={at < 9 && openDetails === null && menu === null && branches === null ? String(at + 1) : undefined} />)}
           {menu?.hash === UNCOMMITTED && <Block id="actions:uncommitted" lines={actionLines()} row={row} />}
         </Box>
       )
