@@ -25,6 +25,7 @@ import {
   selectRow,
   setActionInput,
   setQuery,
+  showChangesDiff,
   showDiff,
   stepDiff,
   stepFind,
@@ -72,6 +73,8 @@ const PANE = 'git-graph'
 const STYLE_STORE_KEY = 'graphStyle'
 /** Files listed under a commit before the rest are summed up in one line. */
 const MAX_FILES = 200
+/** How long after the pane lets go of the keys a typed letter still counts as one meant for it. */
+const STRAY_KEY_MS = 300
 
 type Dollar = EngineInterface
 
@@ -94,6 +97,26 @@ async function detectImages($: Dollar): Promise<boolean> {
     TERM_PROGRAM: await $.env.get('TERM_PROGRAM'),
     KITTY_WINDOW_ID: await $.env.get('KITTY_WINDOW_ID'),
   })
+}
+
+// A key no hotkey answers hands the keyboard back to the prompt and is typed there; the `prompt.edit` hook takes
+// that one key back. `wasFocused` is the pane as last seen (the key may arrive before the render that sees the
+// pane let go); `releasedAt` is when a render last saw it let go.
+let wasFocused = false
+let releasedAt = 0
+
+/** Asks for the keys and reads back whether the pane holds them: the pane need not redraw when it gets them. */
+async function takeKeysBack($: Dollar): Promise<boolean> {
+  await $.ui.open({ id: PANE, title: 'Git Graph', focus: true })
+  const isBack = (await $.ui.panes()).some(pane => pane.id === PANE && pane.isFocused)
+  if (isBack) wasFocused = true
+  return isBack
+}
+
+/** A refocus asked for while the key is still in flight may be refused: once more, after the edit has landed. */
+async function retakeKeysLater($: Dollar): Promise<void> {
+  await $.clock.sleep(50)
+  await takeKeysBack($)
 }
 
 const colorOfCell = (cell: number | null): string | undefined => (cell === null ? undefined : PALETTE[cell])
@@ -169,7 +192,30 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('prompt.edit', { text: '' }, async ($, e, next) => {
+    const key = e.key
+    const sinceRelease = Date.now() - releasedAt
+    const isStray =
+      key !== undefined && !key.ctrl && !key.meta && [...e.inputText].length === 1 && e.inputText.trim() !== '' &&
+      (wasFocused || sinceRelease < STRAY_KEY_MS)
+    if (!isStray) return next(e)
+
+    wasFocused = false
+    releasedAt = 0
+    try {
+      if (!(await takeKeysBack($))) void retakeKeysLater($).catch(() => {})
+    } catch {
+      return next(e) // the pane is gone: the key is the person's prompt
+    }
+    // A Hangul letter is a hotkey typed with the Korean input source on: the keys are the Latin letters.
+    const hint = /^[\x21-\x7e]$/.test(e.inputText) ? 'Esc returns to the prompt' : 'switch the input source to English (한/영)'
+    $.ui.toast(`"${e.inputText}" is not a Git Graph key · ${hint}`)
+    return { text: e.text, cursor: e.cursor }
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    if (wasFocused && !e.props.isFocused) releasedAt = Date.now()
+    wasFocused = e.props.isFocused
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
     // The table names every element on every surface (one a surface lacks draws as nothing), so ask the surface.
@@ -379,13 +425,15 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const FileRow = ({ entry, row, picture }: { entry: GitGraphStatusEntry; row: GraphRow; picture: RowImage | null }) => (
+    const FileRow = ({ entry, row, picture, hotkey }: { entry: GitGraphStatusEntry; row: GraphRow; picture: RowImage | null; hotkey?: string }) => (
       <Box key={`file:${entry.path}`} gap={GAP}>
         <Graph row={row} picture={picture} isTrail />
         <Box width={layout.messageWidth} flexShrink={0}>
-          <Text wrap="truncate-start">
-            <Text color={STATUS_COLORS[entry.code] ?? 'text'}>{entry.code.padEnd(2)}</Text> {entry.path}
-          </Text>
+          <Button key={`change:${entry.path}`} plain hotkey={hotkey} onPress={() => showChangesDiff($, entry.path)}>
+            <Text wrap="truncate-start">
+              <Text color={STATUS_COLORS[entry.code] ?? 'text'}>{entry.code.padEnd(2)}</Text> {entry.path}
+            </Text>
+          </Button>
         </Box>
       </Box>
     )
@@ -565,7 +613,7 @@ export const register: Register = (on, options) => {
               <Text italic inverse={isCursor}>Uncommitted Changes ({changes.length})</Text>
             </Button>
           </Box>
-          {changesOpen && changes.map(entry => <FileRow entry={entry} row={row} picture={trailPicture} />)}
+          {changesOpen && changes.map((entry, at) => <FileRow entry={entry} row={row} picture={trailPicture} hotkey={at < 9 && openDetails === null && menu === null && branches === null ? String(at + 1) : undefined} />)}
           {menu?.hash === UNCOMMITTED && <Block id="actions:uncommitted" lines={actionLines()} row={row} />}
         </Box>
       )

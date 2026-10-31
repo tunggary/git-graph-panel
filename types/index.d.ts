@@ -42,6 +42,8 @@ export type GitGraphFile = {
   /** Lines added and removed; null for a binary file. */
   added: number | null
   deleted: number | null
+  /** An untracked file of the working tree, listed as added; its diff is against /dev/null. */
+  isUntracked?: true
 }
 
 export type GitGraphCommitInfo = {

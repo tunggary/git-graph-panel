@@ -59,7 +59,7 @@ claude plugin install git-graph-panel --marketplace tunggary/git-graph-panel
 - **라벨**은 커밋의 lane 색으로 칠한 알약입니다. 원격에만 있는 브랜치(`origin/x`)는 더 어두운 색, 태그는 호박색, detached `HEAD`는 보라색이고, 체크아웃된 브랜치는 굵게 표시됩니다. 로컬 브랜치와 같은 이름의 원격 브랜치가 같은 커밋에 있으면 알약 하나로 합쳐집니다: `develop │ origin`.
 - **merge 커밋**은 설명이 흐리게 표시됩니다.
 - **열**은 그래프, 라벨과 메시지, 날짜(`10-18 16:25`, 로컬 시간), 작성자, 짧은 해시입니다. 패널이 좁아지면 해시, 작성자, 날짜 순으로 숨겨집니다.
-- **Uncommitted Changes (n)**는 `HEAD` 위에 붙는 행이며, 작업 트리가 깨끗하면 보이지 않습니다. 누르거나 `c`를 누르면 파일과 상태(`M` `A` `D` `R` `??`)가 펼쳐집니다.
+- **Uncommitted Changes (n)**는 `HEAD` 위에 붙는 행이며, 작업 트리가 깨끗하면 보이지 않습니다. 누르거나 `c`를 누르면 파일과 상태(`M` `A` `D` `R` `??`)가 펼쳐집니다. 파일을 누르거나(상세·메뉴가 닫혀 있으면 앞 9개는 `1`-`9`) `HEAD` ↔ 작업 트리 diff가 열리고, `n` / `p`로 변경된 파일을 넘겨 봅니다. 추적하지 않는 파일은 빈 파일과 비교합니다.
 - **원격 토글** `☑ remote`(`b`)는 기본으로 켜져 있습니다. 끄면 그래프와 Branches 목록에 로컬 브랜치만 나옵니다. Branches에서 원격 브랜치를 골라 둔 상태였다면 필터는 `Show All`로 돌아갑니다.
 - **stash**와 다른 도구의 비공개 ref(`refs/cmux/*` 등)는 Git Graph처럼 그래프에서 제외됩니다.
 - **갱신**: 패널을 열 때, `r`을 누를 때, 그리고 명령에 `git`이 들어 있는 Bash 도구 호출이 끝날 때마다 다시 읽습니다. polling은 없으므로 다른 터미널에서 바꾼 내용은 다음 갱신 때 반영됩니다.
@@ -82,7 +82,7 @@ claude plugin install git-graph-panel --marketplace tunggary/git-graph-panel
 
 ### 비교(Compare)
 
-커밋 상세를 연 상태에서 커서를 다른 커밋(또는 Uncommitted Changes)으로 옮기고 `x`를 누르세요. 상세 영역이 `Comparing <older> ↔ <newer>`로 바뀌고 두 지점 사이에 달라진 파일이 나옵니다(`git diff -M older newer`). Uncommitted Changes와 비교할 때는 작업 트리가 새 쪽이고 추적 중인 파일만 비교합니다. 파일을 누르면 같은 두 지점 사이의 그 파일 diff가 열립니다. 다른 행에서 `x`를 누르면 비교 대상이 바뀌고, 열려 있는 커밋 자신에서 `x`를 누르면 상세로 돌아갑니다.
+커밋 상세를 연 상태에서 커서를 다른 커밋(또는 Uncommitted Changes)으로 옮기고 `x`를 누르세요. 상세 영역이 `Comparing <older> ↔ <newer>`로 바뀌고 두 지점 사이에 달라진 파일이 나옵니다(`git diff -M older newer`). Uncommitted Changes와 비교할 때는 작업 트리가 새 쪽이고 추적하지 않는 파일은 추가된 파일로 나옵니다. 파일을 누르면 같은 두 지점 사이의 그 파일 diff가 열립니다. 다른 행에서 `x`를 누르면 비교 대상이 바뀌고, 열려 있는 커밋 자신에서 `x`를 누르면 상세로 돌아갑니다.
 
 ### Branches, Find, Fetch
 

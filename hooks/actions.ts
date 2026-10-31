@@ -186,6 +186,24 @@ export async function showDiff($: Dollar, from: string, to: string, files: GitGr
   }
 }
 
+/** A file of Uncommitted Changes pressed: opens its diff against HEAD, with the other uncommitted files for n / p and the digits. */
+export async function showChangesDiff($: Dollar, path: string): Promise<void> {
+  const snap = await read($, snapshot)
+  if (snap.kind !== 'ready') return
+  const from = snap.head ?? EMPTY_TREE
+  try {
+    const files = await loadChangedFiles($, from, UNCOMMITTED)
+    const index = files.findIndex(file => file.path === path)
+    if (index < 0) {
+      $.ui.toast(`${path} no longer has changes`)
+      return
+    }
+    await showDiff($, from, UNCOMMITTED, files, index, `${pointLabel(from)} ↔ ${pointLabel(UNCOMMITTED)}`)
+  } catch (error) {
+    $.ui.toast(`git failed: ${errorText(error)}`)
+  }
+}
+
 /** n / p: the next or previous file of the same list; it stops at the ends. */
 export async function stepDiff($: Dollar, step: 1 | -1): Promise<void> {
   const view = await read($, diff)
